@@ -40,11 +40,7 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
     user = db.query(Usuario).filter(Usuario.email == form_data.username).first()
-    print("EMAIL ENVIADO:", form_data.username)
-    print("SENHA ENVIADA:", form_data.password)
-    print("USUÁRIO ENCONTRADO:", user.email)
-    print("HASH SALVO:", user.senha_hash)
-    print("VERIFICAÇÃO:", verify_password(form_data.password, user.senha_hash))
+
     if not user or not verify_password(form_data.password, user.senha_hash):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 

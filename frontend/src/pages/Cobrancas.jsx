@@ -1,89 +1,86 @@
+// pages/Cobrancas.jsx
 import { useEffect, useState } from 'react'
-import {
-  listarCobrancas,
-  criarCobranca,
-  atualizarCobranca,
-  cancelarCobranca
-} from '../services/cobrancas'
-import CobrancasTabela from '../components/CobrancasTabela'
-import CobrancasForm from '../components/CobrancasForm'
+import { useNavigate } from 'react-router-dom'
+import { listarCobrancas, cancelarCobranca } from '../services/cobrancas'
 
 export default function Cobrancas() {
   const [cobrancas, setCobrancas] = useState([])
-  const [cobrancaSelecionada, setCobrancaSelecionada] = useState(null)
-  const [mostrarForm, setMostrarForm] = useState(false)
+  const navigate = useNavigate()
 
   const carregarCobrancas = async () => {
     try {
-      const { data } = await listarCobrancas()
-      setCobrancas(data)
+      const res = await listarCobrancas()
+      setCobrancas(res.data)
     } catch (err) {
-      alert('Erro ao carregar cobranças')
+      alert('Erro ao listar cobranças')
     }
   }
 
-  const handleSalvar = async (dados) => {
+  const handleNovo = () => navigate('/cobrancas/novo')
+  const handleEditar = (id) => navigate(`/cobrancas/${id}`)
+  const handleExcluir = async (cobranca) => {
+    if (!window.confirm(`Excluir cobrança de valor R$ ${cobranca.valor}?`)) return
     try {
-      if (cobrancaSelecionada) {
-        await atualizarCobranca(cobrancaSelecionada.id, dados)
-      } else {
-        await criarCobranca(dados)
-      }
-      setMostrarForm(false)
-      setCobrancaSelecionada(null)
+      await cancelarCobranca(cobranca.id)
       carregarCobrancas()
     } catch (err) {
-      alert('Erro ao salvar cobrança')
+      alert('Erro ao excluir cobrança')
     }
   }
 
-  const handleEditar = (cobranca) => {
-    setCobrancaSelecionada(cobranca)
-    setMostrarForm(true)
-  }
-
-  const handleCancelar = async (id) => {
-    if (!window.confirm('Cancelar esta cobrança?')) return
-    try {
-      await cancelarCobranca(id)
-      carregarCobrancas()
-    } catch (err) {
-      alert('Erro ao cancelar')
-    }
-  }
-
-  useEffect(() => {
-    carregarCobrancas()
-  }, [])
+  useEffect(() => { carregarCobrancas() }, [])
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Cobranças</h1>
+    <div className="max-w-4xl mx-auto p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-primary">Cobranças</h1>
         <button
-          onClick={() => {
-            setCobrancaSelecionada(null)
-            setMostrarForm(true)
-          }}
-          className="bg-yellow-400 hover:bg-yellow-300 text-black px-4 py-2 rounded-xl shadow"
+          className="bg-secondary hover:bg-primary text-white px-6 py-2 rounded-xl shadow font-bold transition"
+          onClick={handleNovo}
         >
           Nova Cobrança
         </button>
       </div>
-
-      <CobrancasTabela
-        cobrancas={cobrancas}
-        onEditar={handleEditar}
-        onCancelar={handleCancelar}
-      />
-
-      {mostrarForm && (
-        <CobrancasForm
-          cobranca={cobrancaSelecionada}
-          onCancelar={() => setMostrarForm(false)}
-          onSalvar={handleSalvar}
-        />
-      )}
+      <div className="bg-white shadow rounded-2xl overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-100 text-xs uppercase">
+            <tr>
+              <th className="px-4 py-2">Cliente</th>
+              <th className="px-4 py-2">Valor</th>
+              <th className="px-4 py-2">Vencimento</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cobrancas.map(cobranca => (
+              <tr key={cobranca.id} className="border-t hover:bg-gray-50 transition">
+                <td className="px-4 py-2">{cobranca.cliente?.nome || '-'}</td>
+                <td className="px-4 py-2">R$ {Number(cobranca.valor).toFixed(2)}</td>
+                <td className="px-4 py-2">{cobranca.vencimento}</td>
+                <td className="px-4 py-2">{cobranca.status}</td>
+                <td className="px-4 py-2 text-right space-x-2">
+                  <button
+                    className="text-secondary hover:text-primary font-bold"
+                    onClick={() => handleEditar(cobranca.id)}
+                  >Editar</button>
+                  <button
+                    className="text-danger hover:text-primary font-bold"
+                    onClick={() => handleExcluir(cobranca)}
+                  >Excluir</button>
+                </td>
+              </tr>
+            ))}
+            {cobrancas.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center text-gray-400 py-8">
+                  Nenhuma cobrança cadastrada.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
