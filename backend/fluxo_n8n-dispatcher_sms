@@ -1,0 +1,48 @@
+{
+  "name": "Cobraii - Dispatcher (SMS)",
+  "nodes": [
+    {
+      "parameters": { "triggerTimes": { "item": [ { "mode": "everyMinute" } ] } },
+      "id": "cron",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [ 200, 200 ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/internal/occurrences/claim?limit=50&channels=sms",
+        "options": { "headers": { "X-API-Key": "={{$env.INTERNAL_API_KEY}}" } }
+      },
+      "id": "http-claim",
+      "name": "HTTP Claim (sms)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 5,
+      "position": [ 420, 200 ]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "items" },
+      "id": "split",
+      "name": "Split Items",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1,
+      "position": [ 640, 200 ]
+    },
+    {
+      "parameters": {
+        "workflowId": "Cobraii - Sender SMS",
+        "options": { "checkExistence": true }
+      },
+      "id": "exec-sender",
+      "name": "Execute Sender SMS",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [ 860, 200 ]
+    }
+  ],
+  "connections": {
+    "Cron": { "main": [ [ { "node": "HTTP Claim (sms)", "type": "main", "index": 0 } ] ] },
+    "HTTP Claim (sms)": { "main": [ [ { "node": "Split Items", "type": "main", "index": 0 } ] ] },
+    "Split Items": { "main": [ [ { "node": "Execute Sender SMS", "type": "main", "index": 0 } ] ] }
+  }
+}

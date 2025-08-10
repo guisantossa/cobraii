@@ -1,0 +1,48 @@
+{
+  "name": "Cobraii - Dispatcher",
+  "nodes": [
+    {
+      "parameters": { "triggerTimes": { "item": [ { "mode": "everyMinute" } ] } },
+      "id": "cron1",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [ 200, 200 ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/internal/occurrences/claim?limit=25",
+        "options": { "headers": { "X-API-Key": "{{$env.INTERNAL_API_KEY}}" } }
+      },
+      "id": "http-claim",
+      "name": "HTTP Claim",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 420, 200 ]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "items" },
+      "id": "split",
+      "name": "Split Items",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1,
+      "position": [ 640, 200 ]
+    },
+    {
+      "parameters": {
+        "workflowId": "Cobraii - Sender",
+        "options": { "checkExistence": true }
+      },
+      "id": "exec-sender",
+      "name": "Execute Sender",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [ 860, 200 ]
+    }
+  ],
+  "connections": {
+    "Cron": { "main": [ [ { "node": "HTTP Claim", "type": "main", "index": 0 } ] ] },
+    "HTTP Claim": { "main": [ [ { "node": "Split Items", "type": "main", "index": 0 } ] ] },
+    "Split Items": { "main": [ [ { "node": "Execute Sender", "type": "main", "index": 0 } ] ] }
+  }
+}

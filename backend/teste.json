@@ -1,0 +1,30 @@
+{
+  "tipo": "cobranca",
+  "titulo": "Plano Gold",
+  "template_id": null,
+  "conteudo": {
+    "mensagem": "Olá {{cliente.primeiro_nome}}, sua fatura é {{valor}} e vence em {{vencimento}}. Link: {{link_pagamento}}"
+  },
+  "payload": {
+    "valor": 199.9,
+    "vencimento": "2025-08-15",
+    "link_pagamento": "https://exemplo/pagar/123"
+  },
+  "agendamento": {
+    "timezone": "America/Sao_Paulo",
+    "dt_inicio": "2025-08-10T09:00:00-03:00",
+    "dt_fim": null,
+    "rrule": "FREQ=MONTHLY;BYMONTHDAY=10;BYHOUR=9;BYMINUTE=0;BYSECOND=0",
+    "recorrente": true
+  },
+  "canais": [
+    { "canal": "whatsapp", "ordem": 1, "habilitado": true, "config": {} }
+  ],
+  "usuario_id": "65c57e21-8676-4040-ae86-e23dff67da8f",
+  "destinatarios": [
+    { "cliente_id": "65c57e21-8676-4040-ae86-e23dff67da8f" }
+  ],
+  "subtipo": {
+    "cobranca": { "valor": 199.9, "vencimento": "2025-08-15", "gateway": "asaas" }
+  }
+}

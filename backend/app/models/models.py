@@ -1,6 +1,7 @@
 import enum
 import uuid
 
+from app.db.session import Base
 from sqlalchemy import (
     TIMESTAMP,
     Column,
@@ -13,9 +14,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import declarative_base, relationship
-
-Base = declarative_base()
+from sqlalchemy.orm import relationship
 
 
 # Enums
