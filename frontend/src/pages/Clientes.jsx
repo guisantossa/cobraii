@@ -1,78 +1,135 @@
-// pages/Clientes.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listarClientes, deletarCliente } from '../services/clientes'
+import { Pencil, Plus } from 'lucide-react'
+import Button from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
+import { getClientes } from '../services/clientes'
 
 export default function Clientes() {
-  const [clientes, setClientes] = useState([])
   const navigate = useNavigate()
+  const [clientes, setClientes] = useState([])
+  const [busca, setBusca] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const carregarClientes = async () => {
-    try {
-      const res = await listarClientes()
-      setClientes(res.data)
-    } catch (err) {
-      alert('Erro ao listar clientes')
+  useEffect(() => {
+    let mounted = true
+    async function fetchClientes() {
+      setLoading(true)
+      setError('')
+      try {
+        const { data } = await getClientes()
+        if (mounted) setClientes(Array.isArray(data) ? data : [])
+      } catch (err) {
+        if (mounted) setError(err?.response?.data?.detail || 'Falha ao carregar clientes')
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
-  }
+    fetchClientes()
+    return () => { mounted = false }
+  }, [])
+
+  // helpers de normalização
+  const toStr = (v) => (v ?? '').toString()
+  const normalize = (v) =>
+    toStr(v)
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+
+  const onlyDigits = (v) => toStr(v).replace(/\D/g, '')
+
+  const qNorm = normalize(busca)
+  const qDigits = onlyDigits(busca)
+
+  const filtrados = useMemo(() => {
+    if (!qNorm && !qDigits) return clientes
+    return clientes.filter((c) => {
+      const nome = normalize(c?.nome)
+      const email = normalize(c?.email)
+      const tel = onlyDigits(c?.telefone)
+      const doc = onlyDigits(c?.documento)
+
+      return (
+        (qNorm && (nome.includes(qNorm) || email.includes(qNorm))) ||
+        (qDigits && (tel.includes(qDigits) || doc.includes(qDigits)))
+      )
+    })
+  }, [clientes, qNorm, qDigits])
 
   const handleNovo = () => navigate('/clientes/novo')
   const handleEditar = (id) => navigate(`/clientes/${id}`)
-  const handleExcluir = async (cliente) => {
-    if (!window.confirm(`Excluir cliente ${cliente.nome}?`)) return
-    await deletarCliente(cliente.id)
-    carregarClientes()
-  }
-
-  useEffect(() => { carregarClientes() }, [])
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-primary">Clientes</h1>
-        <button
-          className="bg-secondary hover:bg-primary text-white px-6 py-2 rounded-xl shadow font-bold transition"
-          onClick={handleNovo}
-        >
-          Novo Cliente
-        </button>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="h1">Clientes</h1>
+        <Button onClick={handleNovo}><Plus size={16}/> Novo Cliente</Button>
       </div>
-      <div className="bg-white shadow rounded-2xl overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-100 text-xs uppercase">
-            <tr>
-              <th className="px-4 py-2">Nome</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Telefone</th>
-              <th className="px-4 py-2">Documento</th>
-              <th className="px-4 py-2 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clientes.map(cliente => (
-              <tr key={cliente.id} className="border-t hover:bg-gray-50 transition">
-                <td className="px-4 py-2">{cliente.nome}</td>
-                <td className="px-4 py-2">{cliente.email}</td>
-                <td className="px-4 py-2">{cliente.telefone}</td>
-                <td className="px-4 py-2">{cliente.documento}</td>
-                <td className="px-4 py-2 text-right space-x-2">
-                  <button
-                    className="text-secondary hover:text-primary font-bold"
-                    onClick={() => handleEditar(cliente.id)}
-                  >Editar</button>
-                  <button
-                    className="text-danger hover:text-primary font-bold"
-                    onClick={() => handleExcluir(cliente)}
-                  >Excluir</button>
-                </td>
+
+      <Card className="p-4">
+        <div className="flex items-center gap-3">
+          <Input
+            placeholder="Buscar por nome, e-mail, telefone ou documento"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+      </Card>
+
+      <Card className="p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b" style={{ borderColor: 'var(--border)' }}>
+                <th className="py-2 px-4 font-semibold">Nome</th>
+                <th className="py-2 px-4 font-semibold">E-mail</th>
+                <th className="py-2 px-4 font-semibold">Telefone</th>
+                <th className="py-2 px-4 font-semibold">Documento</th>
+                <th className="py-2 px-4 font-semibold w-24">Ações</th>
               </tr>
-            ))}
-            {clientes.length === 0 && (
-              <tr><td colSpan={5} className="text-center text-gray-400 py-8">Nenhum cliente cadastrado.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="p-6">
+                    <div className="skeleton h-8 w-full" />
+                  </td>
+                </tr>
+              )}
+
+              {!loading && error && (
+                <tr>
+                  <td colSpan={5} className="p-6 text-red-600">{error}</td>
+                </tr>
+              )}
+
+              {!loading && !error && filtrados.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-6 text-slate-500">Nenhum cliente encontrado.</td>
+                </tr>
+              )}
+
+              {!loading && !error && filtrados.map((c) => (
+                <tr key={c.id} className="border-b last:border-b-0 hover:bg-slate-50" style={{ borderColor: 'var(--border)' }}>
+                  <td className="py-2 px-4">{c.nome}</td>
+                  <td className="py-2 px-4">{c.email || '-'}</td>
+                  <td className="py-2 px-4">{c.telefone || '-'}</td>
+                  <td className="py-2 px-4">{c.documento || '-'}</td>
+                  <td className="py-2 px-4">
+                    <button className="c-btn c-btn--ghost" onClick={() => handleEditar(c.id)}>
+                      <Pencil size={14}/> Editar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   )
 }

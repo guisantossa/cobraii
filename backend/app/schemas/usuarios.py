@@ -1,9 +1,6 @@
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
-
-from .schemas import TipoUsuarioEnum
 
 
 # === USUÁRIO ===
@@ -11,11 +8,7 @@ class UsuarioBase(BaseModel):
     nome: str
     email: EmailStr
     telefone: str
-    tipo_usuario: TipoUsuarioEnum
     documento: str
-    banco: Optional[str] = None
-    conta: Optional[str] = None
-    chave_pix: Optional[str] = None
 
 
 class UsuarioCreate(UsuarioBase):

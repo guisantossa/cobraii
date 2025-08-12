@@ -1,139 +1,135 @@
-// pages/ClienteForm.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { criarCliente, atualizarCliente, obterCliente } from '../services/clientes'
-import { InputMask } from '@react-input/mask'
 import { mask } from 'remask'
+import Button from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Label } from '../components/ui/Label'
+import { Card } from '../components/ui/Card'
+import { getCliente, createCliente, updateCliente } from '../services/clientes'
 
-export default function ClienteForm() {
-  const [form, setForm] = useState({
-    nome: '',
-    email: '',
-    telefone: '',
-    documento: ''
-  })
-  const [loading, setLoading] = useState(false)
-  const [erro, setErro] = useState(null)
+export default function ClientesForm() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const isEdit = useMemo(() => Boolean(id), [id])
+
+  const [form, setForm] = useState({ nome: '', email: '', telefone: '', documento: '' })
+  const [loading, setLoading] = useState(isEdit)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    if (id) {
-      setLoading(true)
-      obterCliente(id)
-        .then(res => setForm(res.data))
-        .catch(() => setErro('Erro ao carregar cliente'))
-        .finally(() => setLoading(false))
+    let mounted = true
+    async function load() {
+      if (!isEdit) return
+      try {
+        setLoading(true)
+        const { data } = await getCliente(id)
+        if (mounted && data) {
+          setForm({
+            nome: data.nome || '',
+            email: data.email || '',
+            telefone: data.telefone || '',
+            documento: data.documento || '',
+          })
+        }
+      } catch (err) {
+        setError(err?.response?.data?.detail || 'Falha ao carregar cliente')
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [id])
+    load()
+    return () => { mounted = false }
+  }, [id, isEdit])
 
   function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+    setForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  function handleChangeTelefone(e) {
+    const v = e.target.value.replace(/\D/g, '')
+    const masked = mask(v, ['(99) 9999-9999', '(99) 9 9999-9999'])
+    setForm((prev) => ({ ...prev, telefone: masked }))
   }
 
   function handleChangeDocumento(e) {
-    const value = e.target.value.replace(/\D/g, "")
-    const masked = mask(value, [
-      "999.999.999-99",
-      "99.999.999/9999-99"
-    ])
-    setForm({ ...form, documento: masked })
+    const v = e.target.value.replace(/\D/g, '')
+    const masked = mask(v, ['999.999.999-99', '99.999.999/9999-99'])
+    setForm((prev) => ({ ...prev, documento: masked }))
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setLoading(true)
-    setErro(null)
+    setSubmitting(true)
+    setError('')
+
     try {
-      if (id) {
-        await atualizarCliente(id, form)
-      } else {
-        await criarCliente(form)
+      const payload = {
+        nome: form.nome?.trim(),
+        email: form.email?.trim() || null,
+        telefone: form.telefone?.trim() || null,
+        documento: form.documento?.trim() || null,
       }
+
+      if (isEdit) {
+        await updateCliente(id, payload)
+      } else {
+        await createCliente(payload)
+      }
+
       navigate('/clientes')
-    } catch {
-      setErro('Erro ao salvar cliente')
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Falha ao salvar cliente')
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
   return (
-    <div className="max-w-lg mx-auto p-6 mt-8 bg-white shadow rounded-2xl">
-      <h1 className="text-xl font-bold mb-4 text-primary">
-        {id ? 'Editar Cliente' : 'Novo Cliente'}
-      </h1>
-      {erro && <div className="mb-4 text-red-500">{erro}</div>}
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label htmlFor="nome" className="block font-medium mb-1">Nome *</label>
-          <input
-            id="nome"
-            name="nome"
-            type="text"
-            className="w-full border rounded-xl px-4 py-2 focus:outline-primary"
-            value={form.nome}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor="email" className="block font-medium mb-1">Email</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            className="w-full border rounded-xl px-4 py-2"
-            value={form.email}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <label htmlFor="telefone" className="block font-medium mb-1">Telefone</label>
-          <InputMask
-            mask="(__) _____-____"
-            replacement={{ _: /\d/ }}
-            value={form.telefone}
-            onChange={handleChange}
-            name="telefone"
-            type="tel"
-            className="w-full border rounded-xl px-4 py-2"
-            placeholder="(99) 99999-9999"
-            maxLength={15}
-          />
-        </div>
-        <div>
-          <label htmlFor="documento" className="block font-medium mb-1">CPF ou CNPJ</label>
-          <input
-            id="documento"
-            name="documento"
-            type="text"
-            className="w-full border rounded-xl px-4 py-2"
-            value={form.documento}
-            onChange={handleChangeDocumento}
-            maxLength={18}
-            placeholder="000.000.000-00 ou 00.000.000/0000-00"
-            inputMode="numeric"
-          />
-        </div>
-        <div className="flex gap-4 justify-end mt-6">
-          <button
-            type="button"
-            className="bg-subtle px-4 py-2 rounded-xl text-gray-700 hover:bg-gray-200"
-            onClick={() => navigate('/clientes')}
-            disabled={loading}
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="bg-secondary hover:bg-primary text-white px-6 py-2 rounded-xl shadow font-bold"
-            disabled={loading}
-          >
-            {loading ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
-      </form>
+    <div className="flex justify-center">
+      <Card className="p-5 max-w-3xl w-full">
+        <h1 className="h1 mb-4 text-center">{isEdit ? 'Editar Cliente' : 'Novo Cliente'}</h1>
+        {loading ? (
+          <div className="space-y-3">
+            <div className="skeleton h-8 w-1/2 mx-auto" />
+            <div className="skeleton h-10 w-full" />
+            <div className="skeleton h-10 w-full" />
+            <div className="skeleton h-10 w-full" />
+            <div className="skeleton h-10 w-full" />
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <Label htmlFor="nome">Nome</Label>
+              <Input id="nome" name="nome" value={form.nome} onChange={handleChange} required />
+            </div>
+            <div>
+              <Label htmlFor="email">E-mail</Label>
+              <Input id="email" type="email" name="email" value={form.email} onChange={handleChange} />
+            </div>
+            <div>
+              <Label htmlFor="telefone">Telefone</Label>
+              <Input id="telefone" name="telefone" value={form.telefone} onChange={handleChangeTelefone} />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="documento">Documento (CPF/CNPJ)</Label>
+              <Input id="documento" name="documento" value={form.documento} onChange={handleChangeDocumento} />
+            </div>
+
+            {error && (
+              <div className="md:col-span-2">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            <div className="md:col-span-2 flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => navigate('/clientes')}>Cancelar</Button>
+              <Button type="submit" disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar'}</Button>
+            </div>
+          </form>
+        )}
+      </Card>
     </div>
   )
 }

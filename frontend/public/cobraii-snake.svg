@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Colors -->
+    <style>
+      .outline { fill: #2A1654; }         /* dark outline (deep purple) */
+      .green   { fill: #4CAF50; }         /* body green */
+      .green2  { fill: #43A047; }         /* shading green */
+      .belly   { fill: #FDD835; }         /* belly yellow */
+      .belly2  { fill: #FBC02D; }         /* belly shade */
+      .white   { fill: #FFFFFF; }         /* eye highlights */
+      .glass   { fill: #2A1654; }         /* glasses */
+    </style>
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#2A1654" flood-opacity="0.25"/>
+    </filter>
+    <clipPath id="snakeClip">
+      <path d="M158,364c-22-13-40-41-39-76c1-38,21-63,55-81c-11-43,13-83,58-99
+               c53-19,110,2,130,45c5,10,7,20,7,31c27,8,46,24,55,45c17,38,2,80-35,102
+               c-20,11-44,16-69,12c-3,29-18,58-43,77c-36,27-85,31-119,18z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Mascot group with soft shadow -->
+  <g filter="url(#softShadow)">
+    <!-- OUTER OUTLINE SHAPE -->
+    <path class="outline" d="M150,374c-28-16-48-49-47-88c1-43,24-75,65-96
+         c-12-49,17-94,68-112c61-22,127,4,151,53c7,13,10,27,10,40c31,9,54,28,65,53
+         c20,45,2,94-42,121c-23,14-50,19-78,16c-4,34-21,69-51,92c-42,32-99,37-141,21z"/>
+    
+    <!-- BODY (GREEN) clipped by outline path for clean edges -->
+    <g clip-path="url(#snakeClip)">
+      <!-- main body -->
+      <path class="green" d="M162,360c-21-12-37-38-36-70c1-35,19-58,50-74
+            c6-3,12-5,18-7c-9-39,14-74,54-89c47-17,99,2,115,39c4,9,6,18,6,28
+            c-17-2-35-1-54,2c-44,7-82,24-101,46c-9,11-13,22-12,33c2,13,11,22,29,28
+            c18,6,30,15,35,28c6,16,0,35-16,55c-25,31-69,49-88,41z"/>
+      <!-- green shading -->
+      <path class="green2" opacity="0.35" d="M303,168c-66,12-120,56-117,91c1,10,7,18,20,23
+            c-4-24,28-74,97-96z"/>
+    </g>
+
+    <!-- BELLY -->
+    <path class="belly" d="M260,405c27-25,38-59,26-80c-6-10-17-17-33-22
+          c-20-7-31-17-33-32c-3-20,9-39,29-55c-21,9-39,22-51,36c-21,23-27,48-13,72
+          c19,33,11,63-2,87C219,422,243,420,260,405z"/>
+    <path class="belly2" opacity="0.45" d="M221,324c34,7,56,24,58,46c1,13-3,27-12,41
+          c22-26,29-53,19-70c-6-11-18-18-36-23c-12-3-21-8-29-13c-1,7-1,13,0,19z"/>
+    <!-- belly lines -->
+    <path class="outline" opacity="0.4" d="M224,310c-9,7-17,15-23,24" stroke="#2A1654" stroke-width="6" fill="none"/>
+    <path class="outline" opacity="0.4" d="M242,338c-10,10-18,20-24,32" stroke="#2A1654" stroke-width="6" fill="none"/>
+    <path class="outline" opacity="0.4" d="M262,368c-7,10-13,20-18,30" stroke="#2A1654" stroke-width="6" fill="none"/>
+
+    <!-- HEAD OUTLINE for a crisp edge above clip -->
+    <path class="outline" d="M190,210c0-53,52-95,117-95c50,0,76,19,84,44
+         c8,23-2,49-30,61c-9,4-18,5-27,6c-7,8-17,14-31,18c-22,6-42,3-58-6
+         c-30-2-55-12-55-28z"/>
+
+    <!-- HEAD FILL -->
+    <path class="green" d="M201,206c1-44,46-79,106-79c45,0,68,16,75,36
+         c6,18-3,39-25,48c-8,3-16,4-24,4c-6,7-15,12-26,15c-19,5-36,3-50-5
+         c-26-2-46-10-56-19z"/>
+
+    <!-- SMILE -->
+    <path class="outline" d="M274,240c27,8,52,2,69-12" stroke="#2A1654" stroke-width="10" stroke-linecap="round" fill="none"/>
+    <circle cx="325" cy="224" r="5" class="outline"/>
+    <circle cx="308" cy="224" r="5" class="outline"/>
+
+    <!-- GLASSES -->
+    <g class="glass">
+      <path d="M205,193c30-28,150-30,190,0c6,4,7,11,4,17c-4,7-11,8-18,6
+               c-33-11-64-11-96,0c-7,2-14,1-18-6c-3-6-2-13,4-17z"/>
+      <!-- frames -->
+      <path d="M230,215c0-28,26-46,58-46s58,18,58,46s-26,46-58,46s-58-18-58-46z" fill="none" stroke="#2A1654" stroke-width="16" />
+      <path d="M346,215c0-28,24-46,54-46s54,18,54,46s-24,46-54,46s-54-18-54-46z" fill="none" stroke="#2A1654" stroke-width="16" />
+      <rect x="314" y="202" width="22" height="10" class="glass"/>
+    </g>
+
+    <!-- EYES -->
+    <g>
+      <circle cx="288" cy="215" r="24" fill="#1B0C3A"/>
+      <circle cx="288" cy="208" r="9" class="white"/>
+      <circle cx="400" cy="215" r="24" fill="#1B0C3A"/>
+      <circle cx="400" cy="208" r="9" class="white"/>
+    </g>
+  </g>
+</svg>

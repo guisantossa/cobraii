@@ -1,24 +1,23 @@
-/** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    './index.html',
+    './src/**/*.{js,jsx,ts,tsx}',
   ],
   theme: {
+    container: { center: true, padding: '1rem' },
     extend: {
-      colors: {
-        primary: '#5E2CA5',
-        secondary: '#4CAF50',
-        highlight: '#FDD835',
-        text: '#FFFFFF',
-        subtle: '#E0E0E0',
-        danger: '#E53935',
+      fontFamily: {
+        heading: ['Montserrat', 'ui-sans-serif', 'system-ui'],
+        body: ['Inter', 'ui-sans-serif', 'system-ui'],
       },
-    fontFamily: {
-        sans: ['"Inter"', 'sans-serif'],
-        display: ['"Montserrat"', 'sans-serif'],
-        mono: ['"Rubik"', 'sans-serif'],
-    }
+      borderRadius: {
+        xl: '0.75rem',
+        '2xl': '1rem',
+        '3xl': '1.25rem',
+      },
+      boxShadow: {
+        soft: '0 8px 30px rgba(0,0,0,0.06)',
+      },
     },
   },
   plugins: [],

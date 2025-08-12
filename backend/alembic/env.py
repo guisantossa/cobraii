@@ -16,29 +16,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # IMPORTANTE: importe TODOS os models aqui para o autogenerate enxergar
 from app.models import enums  # garante criação dos tipos enum
-from app.models.lembretes import (
-    ClientePreferencias,
-    GatewayConfig,
-    Lembrete,
-    LembreteAgendamento,
-    LembreteAviso,
-    LembreteCanal,
-    LembreteCobranca,
-    LembreteDestinatario,
-    LembreteDocumento,
-    LembreteOcorrencia,
-    LembreteOcorrenciaCanalLog,
-    Template,
-    WebhookEvent,
-)
-from app.models.models import (
-    Cliente,
-    Cobranca,
-    Notificacao,
-    Pagamento,
-    Repasse,
-    Usuario,
-)
+from app.models import cobrancas, faturas
+from app.models.models import Cliente, Usuario
 
 # --- Imports do seu projeto ---
 from dotenv import load_dotenv

@@ -1,96 +1,57 @@
-import { Routes, Route } from 'react-router-dom'
+// src/routes/index.jsx
+import { Routes, Route, Outlet } from 'react-router-dom'
+import PrivateRoute from './PrivateRoute'
+import AppShell from '../components/AppShell'
+
 import Dashboard from '../pages/Dashboard'
 import Cobrancas from '../pages/Cobrancas'
 import CobrancasForm from '../pages/CobrancasForm'
 import Clientes from '../pages/Clientes'
 import ClientesForm from '../pages/ClientesForm'
+import CobrancasView from '../pages/CobrancasView'
 import Relatorios from '../pages/Relatorios'
 import Logs from '../pages/Logs'
 import Login from '../pages/Login'
-import PrivateRoute from './PrivateRoute'
+
+
+function Layout() {
+  return (
+    <PrivateRoute>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </PrivateRoute>
+  )
+}
 
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Rota pública */}
+      {/* Pública */}
       <Route path="/login" element={<Login />} />
 
-      {/* Rotas protegidas */}
-      <Route
-        path="/dashboard"
-        element={
-          <PrivateRoute>
-            <Dashboard />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/cobrancas"
-        element={
-          <PrivateRoute>
-            <Cobrancas />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/cobrancas/novo"
-        element={
-          <PrivateRoute>
-            <Cobrancas />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/cobrancas/:id"
-        element={
-          <PrivateRoute>
-            <Cobrancas />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/clientes"
-        element={
-          <PrivateRoute>
-            <Clientes />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/clientes/novo"
-        element={
-          <PrivateRoute>
-            <ClientesForm />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/clientes/:id"
-        element={
-          <PrivateRoute>
-            <ClientesForm />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/relatorios"
-        element={
-          <PrivateRoute>
-            <Relatorios />
-          </PrivateRoute>
-        }
-      />
-      <Route
-        path="/logs"
-        element={
-          <PrivateRoute>
-            <Logs />
-          </PrivateRoute>
-        }
-      />
+      {/* Protegidas com layout */}
+      <Route element={<Layout />}>
+        <Route path="/dashboard" element={<Dashboard />} />
 
-      {/* Redirecionamento padrão */}
-      <Route path="*" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+
+        <Route path="/cobrancas" element={<Cobrancas />} />
+        <Route path="/cobrancas/novo" element={<CobrancasForm />} />
+        <Route path="/cobrancas/editar/:id" element={<CobrancasForm />} />
+        <Route path="/cobrancas/:id" element={<CobrancasView />} />
+
+        <Route path="/clientes" element={<Clientes />} />
+        <Route path="/clientes/novo" element={<ClientesForm />} />
+        <Route path="/clientes/:id" element={<ClientesForm />} />
+
+        <Route path="/relatorios" element={<Relatorios />} />
+        <Route path="/logs" element={<Logs />} />
+
+
+
+        {/* Fallback */}
+        <Route path="*" element={<Dashboard />} />
+      </Route>
     </Routes>
   )
 }

@@ -1,86 +1,147 @@
-// pages/Cobrancas.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listarCobrancas, cancelarCobranca } from '../services/cobrancas'
+import { Pencil, Plus, Eye, Bell } from 'lucide-react'
+import Button from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
+import { getCobrancas } from '../services/cobrancas'
 
 export default function Cobrancas() {
-  const [cobrancas, setCobrancas] = useState([])
   const navigate = useNavigate()
+  const [cobrancas, setCobrancas] = useState([])
+  const [busca, setBusca] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const carregarCobrancas = async () => {
-    try {
-      const res = await listarCobrancas()
-      setCobrancas(res.data)
-    } catch (err) {
-      alert('Erro ao listar cobranças')
+  useEffect(() => {
+    let mounted = true
+    async function fetchCobrancas() {
+      setLoading(true)
+      setError('')
+      try {
+        const { data } = await getCobrancas()
+        if (mounted) setCobrancas(Array.isArray(data) ? data : [])
+      } catch (err) {
+        if (mounted) setError(err?.response?.data?.detail || 'Falha ao carregar cobranças')
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
-  }
+    fetchCobrancas()
+    return () => { mounted = false }
+  }, [])
+
+  const toStr = (v) => (v ?? '').toString()
+  const normalize = (v) =>
+    toStr(v)
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+
+  const qNorm = normalize(busca)
+
+  const filtradas = useMemo(() => {
+    if (!qNorm) return cobrancas
+    return cobrancas.filter((c) => {
+      const nomeCliente = normalize(c?.cliente?.nome || c?.cliente_nome_avulso)
+      return nomeCliente.includes(qNorm)
+    })
+  }, [cobrancas, qNorm])
 
   const handleNovo = () => navigate('/cobrancas/novo')
-  const handleEditar = (id) => navigate(`/cobrancas/${id}`)
-  const handleExcluir = async (cobranca) => {
-    if (!window.confirm(`Excluir cobrança de valor R$ ${cobranca.valor}?`)) return
-    try {
-      await cancelarCobranca(cobranca.id)
-      carregarCobrancas()
-    } catch (err) {
-      alert('Erro ao excluir cobrança')
-    }
+  const handleEditar = (id) => navigate(`/cobrancas/editar/${id}`)
+  const handleVisualizar = (id) => navigate(`/cobrancas/${id}`)
+  const handleCriarLembrete = (id) => {
+    alert('Em breve: criar lembrete para esta cobrança.')
   }
 
-  useEffect(() => { carregarCobrancas() }, [])
+  const fmtBRL = (v) => {
+    const num = Number(v ?? 0)
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num)
+  }
+  const fmtData = (iso) => {
+    if (!iso) return '-'
+    const [y, m, d] = iso.split('-')
+    if (!y || !m || !d) return iso
+    return `${d}/${m}/${y}`
+  }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-primary">Cobranças</h1>
-        <button
-          className="bg-secondary hover:bg-primary text-white px-6 py-2 rounded-xl shadow font-bold transition"
-          onClick={handleNovo}
-        >
-          Nova Cobrança
-        </button>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="h1">Cobranças</h1>
+        <Button onClick={handleNovo}><Plus size={16}/> Nova Cobrança</Button>
       </div>
-      <div className="bg-white shadow rounded-2xl overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-100 text-xs uppercase">
-            <tr>
-              <th className="px-4 py-2">Cliente</th>
-              <th className="px-4 py-2">Valor</th>
-              <th className="px-4 py-2">Vencimento</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cobrancas.map(cobranca => (
-              <tr key={cobranca.id} className="border-t hover:bg-gray-50 transition">
-                <td className="px-4 py-2">{cobranca.cliente?.nome || '-'}</td>
-                <td className="px-4 py-2">R$ {Number(cobranca.valor).toFixed(2)}</td>
-                <td className="px-4 py-2">{cobranca.vencimento}</td>
-                <td className="px-4 py-2">{cobranca.status}</td>
-                <td className="px-4 py-2 text-right space-x-2">
-                  <button
-                    className="text-secondary hover:text-primary font-bold"
-                    onClick={() => handleEditar(cobranca.id)}
-                  >Editar</button>
-                  <button
-                    className="text-danger hover:text-primary font-bold"
-                    onClick={() => handleExcluir(cobranca)}
-                  >Excluir</button>
-                </td>
+
+      <Card className="p-4">
+        <div className="flex items-center gap-3">
+          <Input
+            placeholder="Buscar por nome do cliente"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+      </Card>
+
+      <Card className="p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b" style={{ borderColor: 'var(--border)' }}>
+                <th className="md:w-[20%] py-2 px-3 font-semibold">Título</th>
+                <th className="md:w-[20%] py-2 px-3 font-semibold">Cliente</th>
+                <th className="md:w-[16%] py-2 px-3 font-semibold">Valor</th>
+                <th className="md:w-[16%] py-2 px-3 font-semibold">Vencimento</th>
+                <th className="md:w-[38%] py-2 px-3 font-semibold w-[220px]">Ações</th>
               </tr>
-            ))}
-            {cobrancas.length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center text-gray-400 py-8">
-                  Nenhuma cobrança cadastrada.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="p-6">
+                    <div className="skeleton h-8 w-full" />
+                  </td>
+                </tr>
+              )}
+
+              {!loading && error && (
+                <tr>
+                  <td colSpan={5} className="p-6 text-red-600">{error}</td>
+                </tr>
+              )}
+
+              {!loading && !error && filtradas.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-6 text-slate-500">Nenhuma cobrança encontrada.</td>
+                </tr>
+              )}
+
+              {!loading && !error && filtradas.map((c) => (
+                <tr key={c.id} className="border-b last:border-b-0 hover:bg-slate-50" style={{ borderColor: 'var(--border)' }}>
+                  <td className="py-2 px-3">{c.titulo}</td>
+                  <td className="py-2 px-3">{c?.cliente?.nome || c?.cliente_nome_avulso || '-'}</td>
+                  <td className="py-2 px-3">{fmtBRL(c.valor)}</td>
+                  <td className="py-2 px-3">{fmtData(c.vencimento)}</td>
+                  <td className="py-2 px-3">
+                    <div className="flex flex-wrap gap-1">
+                      <button className="c-btn c-btn--ghost" onClick={() => handleVisualizar(c.id)}>
+                        <Eye size={14}/> Ver
+                      </button>
+                      <button className="c-btn c-btn--ghost" onClick={() => handleEditar(c.id)}>
+                        <Pencil size={14}/> Editar
+                      </button>
+                      <button className="c-btn c-btn--ghost" onClick={() => handleCriarLembrete(c.id)}>
+                        <Bell size={14}/> Criar Lembrete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   )
 }

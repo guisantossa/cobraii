@@ -1,15 +1,5 @@
+/* src/index.css */
 @import "tailwindcss";
 
-@theme {
-  --color-bg: #F9F9FB;
-  --color-sidebar: #F3E8FF;
-  --color-primary: #5E2CA5;
-  --color-secondary: #4CAF50;
-  --color-highlight: #FDD835;
-  --color-text: #333333;
-  --color-subtle: #777777;
-
-  --font-sans: Inter, sans-serif;
-  --font-display: Montserrat, sans-serif;
-  --font-highlight: Rubik, sans-serif;
-}
+/* seus estilos globais abaixo, se quiser */
+html, body, #root { height: 100%; }
