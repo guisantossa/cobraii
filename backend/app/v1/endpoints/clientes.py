@@ -2,8 +2,12 @@ from typing import List
 from uuid import UUID
 
 from app.core.dependencies import get_current_user
+from app.crud.clientes import create_cliente, get_cliente, list_clientes
+from app.crud.clientes import (
+    update_cliente as svc_update_cliente,  # delete_cliente as svc_delete_cliente,  # opcional
+)
 from app.db.session import get_db
-from app.models.models import Cliente, Usuario
+from app.models.models import Usuario
 from app.schemas.clientes import ClienteCreate, ClienteOut
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -18,39 +22,25 @@ def criar_cliente(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    novo_cliente = Cliente(
-        usuario_id=usuario.id,
-        nome=cliente.nome,
-        email=cliente.email,
-        telefone=cliente.telefone,
-        documento=cliente.documento,
-    )
-    db.add(novo_cliente)
-    db.commit()
-    db.refresh(novo_cliente)
-    return novo_cliente
+    return create_cliente(db, usuario.id, cliente)
 
 
 # GET /clientes/
 @router.get("/", response_model=List[ClienteOut])
-def listar_clientes(
+def listar_clientes_endpoint(
     db: Session = Depends(get_db), usuario: Usuario = Depends(get_current_user)
 ):
-    return db.query(Cliente).filter(Cliente.usuario_id == usuario.id).all()
+    return list_clientes(db, usuario.id)
 
 
 # GET /clientes/{id}
 @router.get("/{id}", response_model=ClienteOut)
-def obter_cliente(
+def obter_cliente_endpoint(
     id: UUID,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    cliente = (
-        db.query(Cliente)
-        .filter(Cliente.id == id, Cliente.usuario_id == usuario.id)
-        .first()
-    )
+    cliente = get_cliente(db, usuario.id, id)
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
     return cliente
@@ -64,19 +54,20 @@ def atualizar_cliente(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    cliente = (
-        db.query(Cliente)
-        .filter(Cliente.id == id, Cliente.usuario_id == usuario.id)
-        .first()
-    )
+    cliente = svc_update_cliente(db, usuario.id, id, dados)
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-
-    cliente.nome = dados.nome
-    cliente.email = dados.email
-    cliente.telefone = dados.telefone
-    cliente.documento = dados.documento
-
-    db.commit()
-    db.refresh(cliente)
     return cliente
+
+
+# DELETE /clientes/{id}  (opcional — só expor quando quiser no front)
+# @router.delete("/{id}", status_code=204)
+# def remover_cliente(
+#     id: UUID,
+#     db: Session = Depends(get_db),
+#     usuario: Usuario = Depends(get_current_user),
+# ):
+#     ok = svc_delete_cliente(db, usuario.id, id)
+#     if not ok:
+#         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+#     return Response(status_code=204)
