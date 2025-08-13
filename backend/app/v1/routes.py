@@ -1,5 +1,6 @@
 from app.v1.endpoints import (
     admin_lembretes,
+    analytics,
     clientes,
     cobrancas,
     faturas,
@@ -17,3 +18,4 @@ api_router.include_router(faturas.router, prefix="/faturas", tags=["Faturas"])
 api_router.include_router(lembretes.router, prefix="/lembretes", tags=["Lembretes"])
 api_router.include_router(admin_lembretes.router, prefix="", tags=["Admin Lembretes"])
 api_router.include_router(templates.router, prefix="/templates", tags=["Templates"])
+api_router.include_router(analytics.router)

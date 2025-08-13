@@ -30,6 +30,7 @@ class CanalLembreteEnum(str, Enum):
 class StatusOcorrenciaEnum(str, Enum):
     pendente = "pendente"
     enviado = "enviado"
+    entregue = "entregue"
     erro = "erro"
     cancelado = "cancelado"
     skipped = "skipped"
