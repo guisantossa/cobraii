@@ -67,6 +67,7 @@ export default function AppShell() {
           <SideItem to="/templates" icon={<CreditCard size={18} />}>Templates</SideItem>
           <SideItem to="/relatorios" icon={<CreditCard size={18} />}>Relatórios</SideItem>
           <SideItem to="/historicos" icon={<CreditCard size={18} />}>Histórico</SideItem>
+          <SideItem to="/logs" icon={<CreditCard size={18} />}>Logs</SideItem>
         </nav>
       </aside>
 

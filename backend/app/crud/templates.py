@@ -2,6 +2,8 @@
 import re
 from typing import List, Optional, Tuple
 
+from app.audit.diff import diff_simple, obj_snapshot
+from app.audit.logger import audit_log
 from app.models.templates import TemplateMensagem
 from app.schemas.templates import TemplateCreate, TemplateUpdate
 from sqlalchemy import desc, func
@@ -42,6 +44,18 @@ def create_template(
         placeholders=placeholders or None,
     )
     db.add(obj)
+    db.flush()  # garante obj.id para o log
+    audit_log(
+        db,
+        entidade_tipo="template",
+        entidade_id=obj.id,
+        acao="create",
+        detalhes={
+            "titulo": obj.titulo,
+            "canal": obj.canal,
+            "placeholders": obj.placeholders,
+        },
+    )
     db.commit()
     db.refresh(obj)
     return obj
@@ -109,6 +123,8 @@ def update_template(
     if not obj:
         return None
 
+    antes = obj_snapshot(obj, ["titulo", "corpo", "canal", "placeholders"])
+
     if data.titulo is not None:
         obj.titulo = data.titulo.strip()
 
@@ -124,7 +140,15 @@ def update_template(
     if data.placeholders is not None:
         obj.placeholders = data.placeholders or None
 
-    db.add(obj)
+    db.flush()
+    depois = obj_snapshot(obj, ["titulo", "corpo", "canal", "placeholders"])
+    audit_log(
+        db,
+        entidade_tipo="template",
+        entidade_id=obj.id,
+        acao="update",
+        detalhes={"diff": diff_simple(antes, depois)},
+    )
     db.commit()
     db.refresh(obj)
     return obj
@@ -138,6 +162,14 @@ def delete_template(
     obj = get_template_by_id(db, usuario_id, template_id)
     if not obj:
         return False
+    snap = obj_snapshot(obj, ["titulo", "canal", "placeholders"])
     db.delete(obj)
+    audit_log(
+        db,
+        entidade_tipo="template",
+        entidade_id=template_id,
+        acao="delete",
+        detalhes={"antes": snap},
+    )
     db.commit()
     return True

@@ -1,9 +1,11 @@
 # app/services/lembretes.py
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from app.audit.diff import diff_simple, obj_snapshot
+from app.audit.logger import audit_log
 from app.models.enums import FaturaStatusEnum
 from app.models.faturas import Fatura
 from app.models.lembretes import Lembrete
@@ -27,14 +29,6 @@ def _assert_exclusividade(
         * Obrigatório ter `rrule` (e `dtstart` no objeto) e NÃO pode ter `fatura_id` nem `offsets`.
     - Lembrete de Fatura (OFFSETS):
         * Obrigatório ter `fatura_id` E `offsets` e NÃO pode ter `rrule`.
-
-    Args:
-        rrule: string RRULE (ou None)
-        fatura_id: UUID da fatura (ou None)
-        offsets: lista de offsets (ou None)
-
-    Raises:
-        HTTPException(400): quando as combinações são inválidas.
     """
     has_rrule = rrule is not None
     has_fatura = fatura_id is not None
@@ -49,41 +43,36 @@ def _assert_exclusividade(
 
 
 def _hhmm_to_time(hhmm: Optional[str]) -> Optional[time]:
-    """
-    Converte string "HH:MM" para `datetime.time`.
-
-    Args:
-        hhmm: string no formato "HH:MM" (24h) ou None.
-
-    Returns:
-        time ou None.
-
-    Observações:
-        - Não valida range; assume formato correto. Se quiser endurecer, adicione validação.
-    """
+    """Converte string 'HH:MM' para `datetime.time` (24h)."""
     if not hhmm:
         return None
     h, m = hhmm.split(":")
     return time(int(h), int(m))
 
 
+def _tipo_lembrete(rrule: Optional[str], fatura_id: Optional[UUID]) -> str:
+    return "periodico" if rrule else "fatura" if fatura_id else "desconhecido"
+
+
+def _jsonify(o):
+    """Converte recursivamente objetos não-JSON (datetime/date/UUID) para formatos serializáveis."""
+    if isinstance(o, (datetime, date)):
+        return o.isoformat()
+    if isinstance(o, UUID):
+        return str(o)
+    if isinstance(o, dict):
+        return {k: _jsonify(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_jsonify(v) for v in o]
+    if isinstance(o, tuple):
+        return tuple(_jsonify(v) for v in o)
+    return o
+
+
 def expand_rrule(lembrete: Lembrete, limit: int) -> List[datetime]:
     """
     Expande as próximas N execuções a partir de uma RRULE.
-
-    Pré-requisitos:
-        - `lembrete.rrule` e `lembrete.dtstart` devem estar definidos.
-
-    Args:
-        lembrete: instância de Lembrete contendo `rrule`, `dtstart`, `tz`.
-        limit: máximo de instâncias a retornar.
-
-    Returns:
-        Lista de `datetime` timezone-aware, ordenados, até `limit` itens.
-
-    Observações:
-        - Garante que os datetimes retornados estejam com timezone (ZoneInfo).
-        - Se `dtstart` vier naive, forçamos o timezone do lembrete.
+    Pré-requisitos: `lembrete.rrule` e `lembrete.dtstart`.
     """
     if not lembrete.rrule or not lembrete.dtstart:
         return []
@@ -115,23 +104,7 @@ def expand_offsets(
 ) -> List[Tuple[datetime, str]]:
     """
     Expande execuções a partir de OFFSETS relativos ao `vencimento` (somente lembretes de Fatura).
-
-    Args:
-        lembrete: instância de Lembrete contendo `offsets`, `tz` e, opcionalmente, `dtstart` (para hora default).
-        vencimento: datetime base (timezone-aware) do vencimento da fatura.
-        status_pago: True se a fatura já estiver paga (usado para condicao "se_nao_cumprido").
-        limit: máximo de instâncias a retornar.
-
-    Returns:
-        Lista de tuplas `(scheduled_at, "offset")`, ordenada e limitada.
-
-    Regras:
-        - Cada item de `offsets` deve ter:
-            * when: "before" | "after"
-            * days: int >= 0
-            * hora: "HH:MM" (opcional) → caso ausente, usa hora de dtstart; se ausente também, usa 09:00.
-            * condicao: "sempre" | "se_nao_cumprido" (opcional; default: lembrete.condicao)
-        - Se condicao == "se_nao_cumprido" e `status_pago` for True, a execução é descartada.
+    Retorna lista de tuplas (scheduled_at, "offset").
     """
     tz = ZoneInfo(lembrete.tz or "America/Sao_Paulo")
     execucoes: List[Tuple[datetime, str]] = []
@@ -164,21 +137,14 @@ def expand_offsets(
 
 
 # =========================
-# CRUD + Preview
+# CRUD + Preview (com auditoria)
 # =========================
 
 
 def criar_lembrete(db: Session, usuario_id: UUID, data: LembreteCreate) -> Lembrete:
     """
     Cria um Lembrete assegurando a exclusividade de tipo (RRULE xor Fatura+Offsets).
-
-    Args:
-        db: sessão SQLAlchemy
-        usuario_id: dono do lembrete
-        data: payload validado (LembreteCreate)
-
-    Returns:
-        Lembrete recém-criado (com id).
+    Faz auditoria 'create' no mesmo commit.
     """
     _assert_exclusividade(data.rrule, data.fatura_id, data.offsets)
 
@@ -201,22 +167,29 @@ def criar_lembrete(db: Session, usuario_id: UUID, data: LembreteCreate) -> Lembr
         ativa=data.ativa,
     )
     db.add(lembrete)
+    db.flush()  # garante ID para o log
+
+    detalhes = _jsonify(
+        {
+            "tipo": _tipo_lembrete(lembrete.rrule, lembrete.fatura_id),
+            "cliente_id": lembrete.cliente_id,
+            "fatura_id": lembrete.fatura_id,
+            "canal": lembrete.canal,
+            "rrule": lembrete.rrule,
+            "dtstart": lembrete.dtstart,
+            "offsets_len": len(lembrete.offsets or []),
+            "ativa": lembrete.ativa,
+        }
+    )
+    audit_log(db, "lembrete", lembrete.id, "create", detalhes)
+
     db.commit()
     db.refresh(lembrete)
     return lembrete
 
 
 def listar_lembretes(db: Session, usuario_id: UUID) -> List[Lembrete]:
-    """
-    Lista lembretes do usuário logado (ordenados do mais novo para o mais antigo).
-
-    Args:
-        db: sessão SQLAlchemy
-        usuario_id: dono dos lembretes
-
-    Returns:
-        Lista de Lembrete.
-    """
+    """Lista lembretes do usuário logado (mais novo → mais antigo)."""
     return (
         db.query(Lembrete)
         .filter(Lembrete.usuario_id == usuario_id)
@@ -228,17 +201,7 @@ def listar_lembretes(db: Session, usuario_id: UUID) -> List[Lembrete]:
 def obter_lembrete(
     db: Session, usuario_id: UUID, lembrete_id: UUID
 ) -> Optional[Lembrete]:
-    """
-    Recupera um Lembrete do usuário por id.
-
-    Args:
-        db: sessão
-        usuario_id: dono
-        lembrete_id: id do lembrete
-
-    Returns:
-        Lembrete ou None.
-    """
+    """Recupera um Lembrete do usuário por id."""
     return (
         db.query(Lembrete)
         .filter(Lembrete.usuario_id == usuario_id, Lembrete.id == lembrete_id)
@@ -251,43 +214,43 @@ def atualizar_lembrete(
 ) -> Lembrete:
     """
     Atualiza campos de um Lembrete, reforçando a exclusividade de tipo.
-
-    Estratégia:
-        - Carrega o lembrete.
-        - Determina o estado "final" (considerando valores existentes + parciais do update).
-        - Valida exclusividade RRULE xor Fatura+Offsets.
-        - Persiste mudanças.
-
-    Args:
-        db: sessão SQLAlchemy
-        usuario_id: dono do lembrete
-        lembrete_id: id do lembrete
-        data: payload parcial (LembreteUpdate)
-
-    Returns:
-        Lembrete atualizado.
-
-    Raises:
-        HTTPException(404): se não encontrar o lembrete.
-        HTTPException(400): se violar exclusividade.
+    Faz auditoria 'update' com diff no mesmo commit.
     """
     lembrete = obter_lembrete(db, usuario_id, lembrete_id)
     if not lembrete:
         raise HTTPException(404, "Lembrete não encontrado")
 
-    # Aplica validação de exclusividade com visão de "estado final"
+    # snapshot antes
+    antes = obj_snapshot(
+        lembrete,
+        [
+            "cliente_id",
+            "fatura_id",
+            "titulo",
+            "corpo",
+            "canal",
+            "event_date",
+            "rrule",
+            "dtstart",
+            "tz",
+            "offsets",
+            "condicao",
+            "meta",
+            "ativa",
+        ],
+    )
+
+    # Validação de exclusividade com visão de "estado final"
     rrule_final = data.rrule if data.rrule is not None else lembrete.rrule
     fatura_id_final = (
         data.fatura_id if data.fatura_id is not None else lembrete.fatura_id
     )
     offsets_final = data.offsets if data.offsets is not None else lembrete.offsets
-
     _assert_exclusividade(rrule_final, fatura_id_final, offsets_final)
 
     # Aplica alterações
     for field, value in data.model_dump(exclude_unset=True).items():
         if field == "offsets" and value is not None:
-            # pode vir como lista de modelos pydantic; normaliza para dict
             normalized = [
                 o.model_dump() if hasattr(o, "model_dump") else o for o in value
             ]
@@ -296,6 +259,37 @@ def atualizar_lembrete(
             setattr(lembrete, field, value)
 
     db.add(lembrete)
+    db.flush()
+
+    # snapshot depois + diff
+    depois = obj_snapshot(
+        lembrete,
+        [
+            "cliente_id",
+            "fatura_id",
+            "titulo",
+            "corpo",
+            "canal",
+            "event_date",
+            "rrule",
+            "dtstart",
+            "tz",
+            "offsets",
+            "condicao",
+            "meta",
+            "ativa",
+        ],
+    )
+    diff = diff_simple(antes, depois)
+
+    detalhes = _jsonify(
+        {
+            "tipo": _tipo_lembrete(lembrete.rrule, lembrete.fatura_id),
+            "diff": diff,
+        }
+    )
+    audit_log(db, "lembrete", lembrete.id, "update", detalhes)
+
     db.commit()
     db.refresh(lembrete)
     return lembrete
@@ -304,21 +298,26 @@ def atualizar_lembrete(
 def inativar_lembrete(db: Session, usuario_id: UUID, lembrete_id: UUID) -> None:
     """
     Inativa (soft delete) um Lembrete do usuário.
-
-    Args:
-        db: sessão
-        usuario_id: dono
-        lembrete_id: id do lembrete
-
-    Raises:
-        HTTPException(404): se não encontrar o lembrete.
+    Faz auditoria 'inactivate' no mesmo commit.
     """
     lembrete = obter_lembrete(db, usuario_id, lembrete_id)
     if not lembrete:
         raise HTTPException(404, "Lembrete não encontrado")
 
+    antes = obj_snapshot(lembrete, ["ativa"])
     lembrete.ativa = False
     db.add(lembrete)
+    db.flush()
+    depois = obj_snapshot(lembrete, ["ativa"])
+
+    detalhes = _jsonify(
+        {
+            "tipo": _tipo_lembrete(lembrete.rrule, lembrete.fatura_id),
+            "diff": diff_simple(antes, depois),
+        }
+    )
+    audit_log(db, "lembrete", lembrete.id, "inactivate", detalhes)
+
     db.commit()
 
 
@@ -326,27 +325,7 @@ def preview_execucoes(
     db: Session, usuario_id: UUID, lembrete_id: UUID, limit: int
 ) -> PreviewResponse:
     """
-    Gera uma prévia das próximas execuções de um Lembrete.
-
-    - Se for **Periódico (RRULE)**:
-        * Expande as próximas `limit` datas pela RRULE.
-    - Se for **de Fatura (OFFSETS)**:
-        * Busca a Fatura real (do mesmo usuário), pega `vencimento` e `status`.
-        * Constrói o `vencimento` como datetime (com TZ).
-        * Aplica offsets considerando condição "se_nao_cumprido".
-
-    Args:
-        db: sessão SQLAlchemy
-        usuario_id: dono do lembrete
-        lembrete_id: id do lembrete
-        limit: máximo de execuções a retornar
-
-    Returns:
-        PreviewResponse(execucoes=[{scheduled_at, origem, motivo_skip?}, ...])
-
-    Raises:
-        HTTPException(404): se não encontrar o lembrete.
-        HTTPException(400): se Fatura não for encontrada (quando exigida).
+    Gera uma prévia das próximas execuções de um Lembrete (sem auditoria).
     """
     lembrete = obter_lembrete(db, usuario_id, lembrete_id)
     if not lembrete:
