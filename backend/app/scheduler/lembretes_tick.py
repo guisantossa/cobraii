@@ -24,7 +24,7 @@ from app.models.faturas import Fatura
 from app.models.lembretes import Lembrete
 from app.models.lembretes_ocorrencias import LembreteOcorrencia
 from dateutil.rrule import rrulestr
-from fastAPI import HTTPException
+from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, Optional
+from uuid import UUID
 
 from app.models.enums import StatusOcorrenciaEnum  # ajuste se o import for outro
 from pydantic import BaseModel, Field, field_validator
@@ -11,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 class LembreteOcorrenciaBase(BaseModel):
     """Campos comuns de uma ocorrência do lembrete (somente leitura na maior parte)."""
 
-    lembrete_id: str
+    lembrete_id: UUID
     scheduled_at: datetime
     status: StatusOcorrenciaEnum
     motivo_skip: Optional[str] = None
@@ -41,5 +42,5 @@ class LembreteOcorrenciaBase(BaseModel):
 class LembreteOcorrenciaOut(LembreteOcorrenciaBase):
     """Resposta para listagem/detalhe das ocorrências."""
 
-    id: str
+    id: UUID
     created_at: Optional[datetime] = None
