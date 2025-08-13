@@ -1,5 +1,4 @@
 # app/crud/usuarios.py
-# auditoria
 from app.audit.logger import audit_log
 from app.core.security import hash_password, verify_password
 from app.models.models import Usuario
@@ -37,9 +36,8 @@ def get_usuario_by_documento(db: Session, documento: str) -> Usuario | None:
 
 
 def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
-    # unicidade igual ao endpoint original
+    # unicidade (igual ao endpoint original)
     if get_usuario_by_email(db, data.email):
-        # conflito também auditado
         audit_log(db, "usuario", None, "create_conflict", {"email": data.email})
         db.commit()
         raise HTTPException(status_code=400, detail="Email já cadastrado.")
@@ -52,15 +50,11 @@ def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
         nome=data.nome,
         email=data.email,
         telefone=data.telefone,
-        tipo_usuario=data.tipo_usuario,
         documento=data.documento,
-        banco=data.banco,
-        conta=data.conta,
-        chave_pix=data.chave_pix,
         senha_hash=hash_password(data.senha),
     )
     db.add(obj)
-    db.flush()  # garante obj.id para auditar no mesmo commit
+    db.flush()  # garante obj.id p/ log
 
     audit_log(
         db,
@@ -72,11 +66,7 @@ def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
                 "nome": obj.nome,
                 "email": obj.email,
                 "telefone": obj.telefone,
-                "tipo_usuario": obj.tipo_usuario,
                 "documento": obj.documento,
-                "banco": obj.banco,
-                "conta": obj.conta,
-                "chave_pix": obj.chave_pix,
             }
         ),
     )
@@ -89,12 +79,10 @@ def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
 def authenticate_user(db: Session, email: str, senha: str) -> Usuario | None:
     user = get_usuario_by_email(db, email)
     if not user or not verify_password(senha, user.senha_hash):
-        # audita tentativa falha (sem senha!)
         audit_log(db, "usuario", None, "login_failed", {"email": email})
         db.commit()
         return None
 
-    # sucesso de login
     audit_log(db, "usuario", user.id, "login", {"email": user.email})
     db.commit()
     return user
