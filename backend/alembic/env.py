@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # IMPORTANTE: importe TODOS os models aqui para o autogenerate enxergar
 from app.models import enums  # garante criação dos tipos enum
-from app.models import cobrancas, faturas
+from app.models import cobrancas, faturas, lembretes, lembretes_ocorrencias, templates
 from app.models.models import Cliente, Usuario
 
 # --- Imports do seu projeto ---

@@ -4,6 +4,7 @@ from app.v1.endpoints import (
     cobrancas,
     faturas,
     lembretes,
+    templates,
     usuarios,
 )
 from fastapi import APIRouter
@@ -15,3 +16,4 @@ api_router.include_router(cobrancas.router, prefix="/cobrancas", tags=["Cobranç
 api_router.include_router(faturas.router, prefix="/faturas", tags=["Faturas"])
 api_router.include_router(lembretes.router, prefix="/lembretes", tags=["Lembretes"])
 api_router.include_router(admin_lembretes.router, prefix="", tags=["Admin Lembretes"])
+api_router.include_router(templates.router, prefix="/templates", tags=["Templates"])

@@ -3,7 +3,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = "59475a5f2383_lembretes"  # pragma: allowlist secret
+revision = "20250812_as9d8_lembretes"  # pragma: allowlist secret
 down_revision = (
     "59475a5f2383"  # ajuste para a última revision existente # pragma: allowlist secret
 )
@@ -12,6 +12,7 @@ depends_on = None
 
 
 def upgrade():
+
     canal_enum = sa.Enum("whatsapp", "email", "sms", name="canal_lembrete_enum")
     canal_enum.create(op.get_bind(), checkfirst=True)
 

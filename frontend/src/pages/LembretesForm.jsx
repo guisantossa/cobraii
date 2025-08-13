@@ -6,9 +6,12 @@ import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { Card } from '../components/ui/Card'
 import Autocomplete from '../components/ui/Autocomplete'
+import { Select } from '../components/ui/Select'
+import { Textarea } from '../components/ui/Textarea'
 
 import api from '../services/api'
 import { getClientes } from '../services/clientes'
+import { getTemplates } from '../services/templates'
 import {
   createLembrete,
   updateLembrete,
@@ -81,6 +84,43 @@ export default function LembretesForm() {
     condicao: 'sempre',
     relativos: [], // UI-friendly (antes/depois) -> depois mapeamos para offsets
   })
+
+  // === Templates (importar para o corpo) ===
+  const [tplOpen, setTplOpen] = useState(false)
+  const [tplBusca, setTplBusca] = useState('')
+  const [tplLoading, setTplLoading] = useState(false)
+  const [tplItems, setTplItems] = useState([])
+  const [tplError, setTplError] = useState('')
+  const [tplInfo, setTplInfo] = useState('')
+
+  useEffect(() => {
+    if (!tplOpen) return
+    let alive = true
+    const t = setTimeout(async () => {
+      try {
+        setTplLoading(true); setTplError('')
+        const { data } = await getTemplates({ page: 1, page_size: 20, search: tplBusca })
+        if (!alive) return
+        setTplItems(Array.isArray(data?.items) ? data.items : [])
+      } catch (err) {
+        if (alive) setTplError(err?.response?.data?.detail || 'Falha ao carregar templates')
+      } finally {
+        if (alive) setTplLoading(false)
+      }
+    }, 250)
+    return () => { alive = false; clearTimeout(t) }
+  }, [tplOpen, tplBusca])
+
+  function handleUseTemplate(tpl) {
+    setForm(prev => ({
+      ...prev,
+      titulo: prev.titulo?.trim() ? prev.titulo : (tpl?.titulo || ''),
+      corpo: tpl?.corpo ?? prev.corpo,
+    }))
+    setTplOpen(false)
+    setTplInfo('Template importado. Você pode editar o texto livremente.')
+    setTimeout(() => setTplInfo(''), 3000)
+  }
 
   // carregar clientes +, se edição, dados do lembrete
   useEffect(() => {
@@ -458,17 +498,42 @@ export default function LembretesForm() {
             </div>
 
             <div>
-              <Label htmlFor="corpo">Corpo (mensagem)</Label>
-              <textarea
+              <div className="flex items-center justify-between">
+                <Label htmlFor="corpo">Corpo (mensagem)</Label>
+                <Button type="button" variant="secondary" onClick={() => setTplOpen(v => !v)}>
+                  {tplOpen ? 'Fechar templates' : 'Importar template'}
+                </Button>
+              </div>
+
+              {tplOpen && (
+                <div className="mt-2 border rounded p-3" style={{ borderColor: 'var(--border)' }}>
+                  <Autocomplete
+                    value={tplBusca}
+                    onChangeText={setTplBusca}
+                    onSelect={handleUseTemplate}
+                    items={tplItems}
+                    getItemLabel={(t) => t?.titulo || ''}
+                    placeholder="Buscar templates por título ou conteúdo..."
+                    inputProps={{ id: 'template_busca', name: 'template_busca' }}
+                  />
+                  {tplLoading && <div className="skeleton h-6 w-full mt-2" />}
+                  {tplError && <p className="text-sm text-red-600 mt-2">{tplError}</p>}
+                  {!tplLoading && !tplError && tplItems.length === 0 && (
+                    <p className="text-sm text-slate-500 mt-2">Nenhum template encontrado.</p>
+                  )}
+                </div>
+              )}
+
+              <Textarea
                 id="corpo"
                 name="corpo"
                 value={form.corpo}
                 onChange={handleChange}
-                className="w-full border rounded px-3 py-2 min-h-[120px]"
-                placeholder="Mensagem do lembrete... (ex.: Olá {{cliente.nome}}...)"
+                placeholder="Mensagem do lembrete... (ex.: Olá {{cliente.nome}}, sua fatura vence em {{fatura.vencimento}})"
               />
+              {tplInfo && <p className="text-xs text-emerald-700 mt-1">{tplInfo}</p>}
               <p className="text-xs text-slate-500 mt-1">
-                Placeholders: {'{{cliente.nome}}'}, {'{{fatura.valor}}'}, {'{{fatura.vencimento}}'}
+                Placeholders disponíveis (exemplos): {'{{cliente.nome}}'}, {'{{fatura.valor}}'}, {'{{fatura.vencimento}}'}
               </p>
             </div>
 
@@ -521,13 +586,12 @@ export default function LembretesForm() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label>Frequência</Label>
-                      <select
+                      <Select
                         value={form.rrule_freq}
                         onChange={(e) => setForm(f => ({ ...f, rrule_freq: e.target.value }))}
-                        className="border rounded px-3 py-2 w-full"
                       >
                         {FREQS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </select>
+                      </Select>
                     </div>
                     {form.rrule_freq === 'WEEKLY' && (
                       <div className="md:col-span-2">
@@ -568,12 +632,11 @@ export default function LembretesForm() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="fatura_id">Fatura</Label>
-                    <select
+                    <Select
                       id="fatura_id"
                       name="fatura_id"
                       value={form.fatura_id}
                       onChange={handleChange}
-                      className="border border-gray-300 rounded px-3 py-2 w-full"
                       disabled={!form.cliente_id}
                     >
                       <option value="">{form.cliente_id ? 'Selecione...' : 'Selecione antes um cliente'}</option>
@@ -582,20 +645,19 @@ export default function LembretesForm() {
                           {f.vencimento} — R$ {Number(f.valor).toFixed(2)} ({f.status})
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="condicao">Condição (default)</Label>
-                    <select
+                    <Select
                       id="condicao"
                       name="condicao"
                       value={form.condicao}
                       onChange={handleChange}
-                      className="border border-gray-300 rounded px-3 py-2 w-full"
                     >
                       <option value="sempre">sempre</option>
                       <option value="se_nao_cumprido">se_nao_cumprido</option>
-                    </select>
+                    </Select>
                     <p className="text-xs text-slate-500 mt-1">Cada lembrete relativo pode sobrescrever essa condição.</p>
                   </div>
                 </div>
@@ -613,14 +675,13 @@ export default function LembretesForm() {
                       <div key={idx} className="grid grid-cols-1 md:grid-cols-[140px_1fr_1fr_1fr_100px] gap-3 items-end">
                         <div>
                           <Label>Quando</Label>
-                          <select
+                          <Select
                             value={o.quando}
                             onChange={(e) => changeRelativo(idx, 'quando', e.target.value)}
-                            className="border border-gray-300 rounded px-3 py-2 w-full"
                           >
                             <option value="antes">antes</option>
                             <option value="depois">depois</option>
-                          </select>
+                          </Select>
                         </div>
                         <div>
                           <Label>Dias</Label>
@@ -645,14 +706,13 @@ export default function LembretesForm() {
                         </div>
                         <div>
                           <Label>Condição</Label>
-                          <select
+                          <Select
                             value={o.condicao || 'sempre'}
                             onChange={(e) => changeRelativo(idx, 'condicao', e.target.value)}
-                            className="border border-gray-300 rounded px-3 py-2 w-full"
                           >
                             <option value="sempre">sempre</option>
                             <option value="se_nao_cumprido">se_nao_cumprido</option>
-                          </select>
+                          </Select>
                         </div>
                         <div className="flex justify-end">
                           <Button type="button" variant="danger" onClick={() => removeRelativo(idx)}>Remover</Button>
