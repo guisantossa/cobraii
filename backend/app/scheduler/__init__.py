@@ -37,7 +37,7 @@ def _get_scheduler() -> BackgroundScheduler:
     }
     job_defaults = {
         "coalesce": True,  # se atrasar, roda uma vez consolidando
-        "max_instances": 1,  # evita concorrência do mesmo job
+        "max_instances": 2,  # evita concorrência do mesmo job
         "misfire_grace_time": 30,
     }
 

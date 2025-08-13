@@ -78,6 +78,7 @@ def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
 
 def authenticate_user(db: Session, email: str, senha: str) -> Usuario | None:
     user = get_usuario_by_email(db, email)
+    print(user)
     if not user or not verify_password(senha, user.senha_hash):
         audit_log(db, "usuario", None, "login_failed", {"email": email})
         db.commit()
