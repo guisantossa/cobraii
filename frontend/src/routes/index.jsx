@@ -13,6 +13,10 @@ import Relatorios from '../pages/Relatorios'
 import Logs from '../pages/Logs'
 import Login from '../pages/Login'
 
+import Lembretes from '../pages/Lembretes'
+import LembretesForm from '../pages/LembretesForm'
+import LembretesView from '../pages/LembretesView'
+
 
 function Layout() {
   return (
@@ -43,6 +47,12 @@ export default function AppRoutes() {
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/clientes/novo" element={<ClientesForm />} />
         <Route path="/clientes/:id" element={<ClientesForm />} />
+        
+        
+        <Route path="/lembretes" element={<Lembretes />} />
+        <Route path="/lembretes/novo" element={<LembretesForm />} />
+        <Route path="/lembretes/:id" element={<LembretesView />} />
+        <Route path="/lembretes/editar/:id" element={<LembretesForm />} />
 
         <Route path="/relatorios" element={<Relatorios />} />
         <Route path="/logs" element={<Logs />} />

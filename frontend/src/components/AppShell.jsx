@@ -62,7 +62,8 @@ export default function AppShell() {
         <nav className="flex-1 p-2 space-y-1">
           <SideItem to="/dashboard" icon={<LayoutGrid size={18} />}>Dashboard</SideItem>
           <SideItem to="/clientes" icon={<Users size={18} />}>Clientes</SideItem>
-          <SideItem to="/cobrancas" icon={<CreditCard size={18} />}>Cobranças / Lembretes</SideItem>
+          <SideItem to="/cobrancas" icon={<CreditCard size={18} />}>Cobranças</SideItem>
+          <SideItem to="/lembretes" icon={<CreditCard size={18} />}>Lembretes</SideItem>
           <SideItem to="/templates" icon={<CreditCard size={18} />}>Templates</SideItem>
           <SideItem to="/relatorios" icon={<CreditCard size={18} />}>Relatórios</SideItem>
           <SideItem to="/historicos" icon={<CreditCard size={18} />}>Histórico</SideItem>

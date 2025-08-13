@@ -32,3 +32,17 @@ class StatusRepasseEnum(str, Enum):
 class StatusNotificacaoEnum(str, Enum):
     sucesso = "sucesso"
     falha = "falha"
+
+
+class CanalLembreteEnum(str, Enum):
+    whatsapp = "whatsapp"
+    email = "email"
+    sms = "sms"
+
+
+class StatusOcorrenciaEnum(str, Enum):
+    pendente = "pendente"
+    enviado = "enviado"
+    erro = "erro"
+    cancelado = "cancelado"
+    skipped = "skipped"
