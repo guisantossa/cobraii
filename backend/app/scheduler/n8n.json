@@ -1,0 +1,232 @@
+{
+  "name": "Cobraii - Dispatcher Único v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook/lembretes",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1040, 0],
+      "id": "WebhookIn"
+    },
+    {
+      "parameters": {
+        "functionCode": "/* Validação HMAC no corpo bruto (binário) e parse do JSON.\n   - Requer Webhook com Options > Raw Body = true\n   - Calcula HMAC sobre o BUFFER bruto (não re-stringifica)\n*/\nconst crypto = require('crypto');\nconst secret = (process.env.N8N_HMAC_SECRET || '').trim();\n\n// Lê o buffer binário gravado pelo Webhook (propriedade padrão 'data')\nconst buf = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst raw = buf.toString('utf8');\n\nlet payload;\ntry { payload = JSON.parse(raw); } catch (e) {\n  return [{ json: { ok: false, error: 'json_invalido' }, httpCode: 400 }];\n}\n\nconst received = (payload.assinatura || '').trim();\nlet validado = false;\nif (!secret) {\n  validado = received === '';\n} else {\n  const computed = crypto.createHmac('sha256', Buffer.from(secret,'utf-8')).update(buf).digest('hex');\n  const a = Buffer.from(computed, 'hex');\n  const b = Buffer.from(received || '', 'hex');\n  validado = a.length === b.length && crypto.timingSafeEqual(a, b);\n}\n\nreturn [{ json: { ...payload, meta: { ...(payload.meta || {}), validado } } }];"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [-800, 0],
+      "id": "ValidateHMAC"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"meta\"][\"validado\"]}}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-600, 0],
+      "id": "IfHmac"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ok:false, error:'assinatura_invalida' }, httpCode: 400 }];"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [-420, 120],
+      "id": "HmacFail"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "value": "whatsapp" },
+            { "value": "email" },
+            { "value": "sms" }
+          ]
+        },
+        "value": "={{$json[\"canal\"]}}"
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [-380, -160],
+      "id": "SwitchCanal"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.EVOLUTION_API_URL}}",
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "retryWait": 1000,
+          "headers": {
+            "parameters": [
+              { "name": "Authorization", "value": "Bearer {{$env.EVOLUTION_API_TOKEN}}"},
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          },
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={\n  \"number\": $json.meta?.telefone || $json.meta?.whatsapp || \"\",\n  \"text\": $json.corpo || \"\"\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [-120, -340],
+      "id": "HTTP_WA",
+      "name": "WhatsApp → Evolution API",
+      "alwaysOutputData": false,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.EMAIL_FROM || \"no-reply@cobraii.app\"}}",
+        "toEmail": "={{$json.meta?.email || \"\"}}",
+        "subject": "={{$json.titulo || \"Lembrete\"}}",
+        "text": "={{$json.corpo || \"\"}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [-120, -160],
+      "id": "EmailSend",
+      "name": "Email → SMTP",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SMS_API_URL}}",
+        "options": {
+          "retryOnFail": true,
+          "maxTries": 3,
+          "retryWait": 1000,
+          "headers": {
+            "parameters": [
+              { "name": "Authorization", "value": "Bearer {{$env.SMS_API_TOKEN}}"},
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          },
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={\n  \"to\": $json.meta?.telefone || \"\",\n  \"message\": $json.corpo || \"\"\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [-120, 20],
+      "id": "HTTP_SMS",
+      "name": "SMS → HTTP API",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "functionCode": "/* Normaliza sucesso dos provedores em { ok:true, canal, message_id } */\nconst canal = $json.canal;\nlet messageId = null;\nif (canal === 'whatsapp') {\n  messageId = $json.message?.id || $json.id || $json.data?.messageId || $json.data?.id || null;\n} else if (canal === 'sms') {\n  messageId = $json.sid || $json.data?.id || null;\n} else if (canal === 'email') {\n  messageId = null;\n}\nreturn [{ json: { ok: true, canal, message_id: messageId } }];"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [160, -260],
+      "id": "NormalizeOK"
+    },
+    {
+      "parameters": {
+        "functionCode": "/* Normaliza erro (saída de Continue On Fail) em { ok:false, error, provider } */\nconst err = $json.error || 'falha_provedor';\nreturn [{ json: { ok:false, error: err, provider_response: $json }, httpCode: 502 }];"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [160, -60],
+      "id": "NormalizeErr"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{$json[\"error\"]}}", "operation": "isEmpty" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [20, -160],
+      "id": "IfErro"
+    },
+    {
+      "parameters": {
+        "responseBody": "={{$json}}",
+        "responseCode": 200
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2,
+      "position": [380, -260],
+      "id": "HTTP_200"
+    },
+    {
+      "parameters": {
+        "responseBody": "={{$json}}",
+        "responseCode": "={{$json[\"httpCode\"] || 200}}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2,
+      "position": [380, -60],
+      "id": "HTTP_ERR"
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ok:false, error:'canal_nao_suportado' }, httpCode: 422 }];"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [-120, 200],
+      "id": "CanalNaoSuportado"
+    }
+  ],
+  "connections": {
+    "WebhookIn": { "main": [[{ "node": "ValidateHMAC", "type": "main", "index": 0 }]] },
+    "ValidateHMAC": { "main": [[{ "node": "IfHmac", "type": "main", "index": 0 }]] },
+    "IfHmac": {
+      "main": [
+        [{ "node": "HmacFail", "type": "main", "index": 0 }],
+        [{ "node": "SwitchCanal", "type": "main", "index": 0 }]
+      ]
+    },
+    "HmacFail": { "main": [[{ "node": "HTTP_ERR", "type": "main", "index": 0 }]] },
+    "SwitchCanal": {
+      "main": [
+        [{ "node": "HTTP_WA", "type": "main", "index": 0 }],
+        [{ "node": "EmailSend", "type": "main", "index": 0 }],
+        [{ "node": "HTTP_SMS", "type": "main", "index": 0 }],
+        [{ "node": "CanalNaoSuportado", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP_WA": { "main": [[{ "node": "IfErro", "type": "main", "index": 0 }]] },
+    "EmailSend": { "main": [[{ "node": "IfErro", "type": "main", "index": 0 }]] },
+    "HTTP_SMS": { "main": [[{ "node": "IfErro", "type": "main", "index": 0 }]] },
+    "IfErro": {
+      "main": [
+        [{ "node": "NormalizeErr", "type": "main", "index": 0 }],
+        [{ "node": "NormalizeOK", "type": "main", "index": 0 }]
+      ]
+    },
+    "NormalizeOK": { "main": [[{ "node": "HTTP_200", "type": "main", "index": 0 }]] },
+    "NormalizeErr": { "main": [[{ "node": "HTTP_ERR", "type": "main", "index": 0 }]] },
+    "CanalNaoSuportado": { "main": [[{ "node": "HTTP_ERR", "type": "main", "index": 0 }]] }
+  }
+}

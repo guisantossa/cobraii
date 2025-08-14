@@ -1,4 +1,17 @@
 # app/scheduler/lembretes_tick.py
+"""
+Loop de agendamento/entrega de lembretes/cobranças.
+
+Fluxo do `tick_scheduler`:
+  1) Atualiza `proxima_execucao_at` dos Lembretes (RRULE ou offsets/fatura).
+  2) Materializa LembreteOcorrencias na janela [now - tol, now + lookahead].
+  3) Despacha ocorrências pendentes vencidas p/ n8n, com backoff e quiet hours.
+
+Contrato com o n8n:
+- Envio: POST JSON para N8N_WEBHOOK_URL.
+- Autenticação: HMAC-SHA256 opcional no campo `assinatura`.
+- Resposta: 2xx = sucesso; qualquer outra resposta = erro/retry (até MAX_TENTATIVAS).
+"""
 from __future__ import annotations
 
 import hashlib
@@ -54,11 +67,8 @@ QUIET_END = os.getenv("QUIET_HOURS_END")  # ex "07:00"
 
 # N8n
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "").strip()  # obrigatório no envio
-N8N_HMAC_SECRET = (
-    os.getenv("N8N_HMAC_SECRET", "").encode("utf-8")
-    if os.getenv("N8N_HMAC_SECRET")
-    else None
-)
+N8N_BASIC_USER = os.getenv("N8N_BASIC_USER", "").strip()
+N8N_BASIC_PASS = os.getenv("N8N_BASIC_PASS", "").strip()
 N8N_TIMEOUT = float(os.getenv("N8N_TIMEOUT", "10.0"))
 
 
@@ -68,36 +78,61 @@ N8N_TIMEOUT = float(os.getenv("N8N_TIMEOUT", "10.0"))
 
 
 def _tz(tz_name: Optional[str]) -> ZoneInfo:
-    """Resolve a timezone válida."""
+    """Resolve e retorna a timezone.
+
+    Args:
+        tz_name (Optional[str]): Nome IANA desejado. Se None, usa TZ_DEFAULT.
+
+    Returns:
+        ZoneInfo: Objeto de timezone.
+    """
     return ZoneInfo(tz_name or TZ_DEFAULT)
 
 
 def _now(tz_name: Optional[str] = None) -> datetime:
-    """Agora com timezone do app (ou informada)."""
+    """Retorna o instante atual com timezone.
+
+    Args:
+        tz_name (Optional[str]): Nome IANA. Se None, usa TZ_DEFAULT.
+
+    Returns:
+        datetime: Agora com tzinfo.
+    """
     return datetime.now(_tz(tz_name or TZ_DEFAULT))
 
 
 def _hmac_signature(payload: dict) -> str:
+    """Gera HMAC-SHA256 do payload JSON (ordenado) usando `N8N_HMAC_SECRET`.
+
+    Args:
+        payload (dict): Dicionário a ser assinado.
+
+    Returns:
+        str: Hex digest da assinatura ou string vazia se o segredo não estiver setado.
     """
-    Gera assinatura HMAC-SHA256 do JSON do payload usando N8N_HMAC_SECRET.
-    Se o segredo não estiver configurado, retorna string vazia.
-    """
-    if not N8N_HMAC_SECRET:
+    if not N8N_BASIC_PASS:
         return ""
     # JSON determinístico
     body = json.dumps(
         payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
-    return hmac.new(N8N_HMAC_SECRET, body, hashlib.sha256).hexdigest()
+    return hmac.new(N8N_BASIC_PASS, body, hashlib.sha256).hexdigest()
 
 
 def _in_quiet_hours(
     dt: datetime, start_hhmm: Optional[str], end_hhmm: Optional[str]
 ) -> bool:
-    """
-    Retorna True se 'dt' cai dentro da janela de silêncio [start, end).
-    Se não configurado, False.
-    Suporta janelas que cruzam a meia-noite (ex: 22:00–07:00).
+    """Verifica se `dt` está dentro da janela de silêncio [start, end).
+
+    Suporta faixas que cruzam meia-noite (ex.: 22:00–07:00).
+
+    Args:
+        dt (datetime): Instante alvo.
+        start_hhmm (Optional[str]): "HH:MM" início da janela.
+        end_hhmm (Optional[str]): "HH:MM" fim da janela.
+
+    Returns:
+        bool: True se dentro da janela; False caso contrário.
     """
     if not start_hhmm or not end_hhmm:
         return False
@@ -117,9 +152,14 @@ def _in_quiet_hours(
 
 
 def _next_after_rrule(lembrete: Lembrete, after_dt: datetime) -> Optional[datetime]:
-    """
-    Pega a próxima ocorrência (> after_dt) de uma RRULE.
-    Se dtstart for naive, força TZ do lembrete.
+    """Computa a próxima ocorrência (>= after_dt) para um lembrete com RRULE.
+
+    Args:
+        lembrete (Lembrete): Lembrete com `rrule` e `dtstart`.
+        after_dt (datetime): Referência temporal.
+
+    Returns:
+        Optional[datetime]: Próxima ocorrência ou None.
     """
     if not lembrete.rrule or not lembrete.dtstart:
         return None
@@ -140,8 +180,15 @@ def _next_after_rrule(lembrete: Lembrete, after_dt: datetime) -> Optional[dateti
 def _between_rrule(
     lembrete: Lembrete, start: datetime, end: datetime
 ) -> List[datetime]:
-    """
-    Lista as ocorrências da RRULE entre [start, end].
+    """Lista ocorrências de RRULE em [start, end].
+
+    Args:
+        lembrete (Lembrete): Lembrete com `rrule` e `dtstart`.
+        start (datetime): Início da janela.
+        end (datetime): Fim da janela.
+
+    Returns:
+        List[datetime]: Ocorrências (com tzinfo).
     """
     if not lembrete.rrule or not lembrete.dtstart:
         return []
@@ -160,11 +207,22 @@ def _between_rrule(
 def _fatura_info(
     db: Session, usuario_id: UUID, fatura_id: UUID, tz_name: Optional[str]
 ) -> Tuple[datetime, bool, Optional[dict]]:
-    """
-    Carrega vencimento/status/valor da fatura e retorna:
-      - vencimento_dt (datetime com TZ, hora herdada do lembrete será aplicada depois)
-      - status_pago (bool)
-      - dict informativo (id, vencimento, status, valor) para payload
+    """Carrega informações da fatura para composição das ocorrências.
+
+    Args:
+        db (Session): Sessão SQLAlchemy.
+        usuario_id (UUID): Dono da fatura.
+        fatura_id (UUID): Identificador da fatura.
+        tz_name (Optional[str]): Timezone para compor datetime.
+
+    Returns:
+        Tuple[datetime, bool, Optional[dict]]:
+            - datetime do vencimento (00:00 com TZ; hora virá de dtstart/offset).
+            - bool indicando se está paga.
+            - dict informativo (id, vencimento, status, valor) p/ payload.
+
+    Raises:
+        HTTPException: 400 se a fatura não for encontrada.
     """
     fatura: Optional[Fatura] = (
         db.query(Fatura)
@@ -192,7 +250,15 @@ def _fatura_info(
 
 
 def _first_future(items: Iterable[datetime], ref: datetime) -> Optional[datetime]:
-    """Retorna a menor data >= ref, se existir."""
+    """Retorna a menor data >= ref.
+
+    Args:
+        items (Iterable[datetime]): Lista de datetimes.
+        ref (datetime): Referência.
+
+    Returns:
+        Optional[datetime]: Primeiro futuro ou None.
+    """
     fut = [dt for dt in items if dt >= ref]
     return min(fut) if fut else None
 
@@ -200,10 +266,19 @@ def _first_future(items: Iterable[datetime], ref: datetime) -> Optional[datetime
 def _compute_next_execution(
     db: Session, lembrete: Lembrete, now: datetime
 ) -> Optional[datetime]:
-    """
-    Calcula a próxima execução futura do lembrete (>= now).
-    RRULE: usa .after(now).
-    Fatura/Offsets: expande offsets e pega a primeira futura.
+    """Calcula a próxima execução futura (>= now) para um lembrete.
+
+    Regras:
+      - Se `rrule`, usa a próxima ocorrência da regra.
+      - Se offsets/fatura, expande offsets e pega a primeira futura.
+
+    Args:
+        db (Session): Sessão SQLAlchemy.
+        lembrete (Lembrete): Registro alvo.
+        now (datetime): Referência.
+
+    Returns:
+        Optional[datetime]: Próxima execução ou None.
     """
     if lembrete.rrule:
         return _next_after_rrule(lembrete, now)
@@ -226,10 +301,16 @@ def _compute_next_execution(
 def _occurrences_in_window(
     db: Session, lembrete: Lembrete, start: datetime, end: datetime
 ) -> List[datetime]:
-    """
-    Lista ocorrências que caem na janela [start, end].
-    RRULE: between.
-    Offsets: expande e filtra na janela.
+    """Lista ocorrências de um lembrete que caem na janela [start, end].
+
+    Args:
+        db (Session): Sessão SQLAlchemy.
+        lembrete (Lembrete): Registro alvo.
+        start (datetime): Início.
+        end (datetime): Fim.
+
+    Returns:
+        List[datetime]: Ocorrências na janela.
     """
     if lembrete.rrule:
         return _between_rrule(lembrete, start, end)
@@ -250,8 +331,15 @@ def _occurrences_in_window(
 def _create_occurrence_if_missing(
     db: Session, lembrete: Lembrete, scheduled_at: datetime
 ) -> LembreteOcorrencia:
-    """
-    Idempotente: cria ocorrência pendente se ainda não existir para (lembrete_id, scheduled_at).
+    """Cria uma ocorrência pendente se ainda não existir (idempotente).
+
+    Args:
+        db (Session): Sessão SQLAlchemy.
+        lembrete (Lembrete): Lembrete pai.
+        scheduled_at (datetime): Instante programado.
+
+    Returns:
+        LembreteOcorrencia: Ocorrência existente ou recém-criada.
     """
     occ = (
         db.query(LembreteOcorrencia)
@@ -280,9 +368,15 @@ def _create_occurrence_if_missing(
 def _build_payload(
     lembrete: Lembrete, occ: LembreteOcorrencia, fatura_info: Optional[dict]
 ) -> dict:
-    """
-    Monta o payload que será enviado ao n8n.
-    Inclui dados básicos e um bloco 'fatura' quando aplicável.
+    """Monta o payload enviado ao n8n (com HMAC opcional).
+
+    Args:
+        lembrete (Lembrete): Lembrete.
+        occ (LembreteOcorrencia): Ocorrência a despachar.
+        fatura_info (Optional[dict]): Bloco informativo de fatura.
+
+    Returns:
+        dict: Payload pronto para envio.
     """
     payload = {
         "id_ocorrencia": str(occ.id),
@@ -312,16 +406,29 @@ def _build_payload(
 def _dispatch_one(
     occ: LembreteOcorrencia, lembrete: Lembrete, fatura_block: Optional[dict]
 ) -> Tuple[bool, dict]:
-    """
-    Envia uma ocorrência ao n8n.
-    Retorna (sucesso, resposta_json_ou_erro).
+    """Envia uma ocorrência ao n8n.
+
+    Args:
+        occ (LembreteOcorrencia): Ocorrência a enviar.
+        lembrete (Lembrete): Lembrete pai.
+        fatura_block (Optional[dict]): Dados de fatura (se houver).
+
+    Returns:
+        Tuple[bool, dict]: (sucesso, resposta_json_ou_erro).
     """
     if not N8N_WEBHOOK_URL:
         return False, {"error": "N8N_WEBHOOK_URL não configurada"}
 
     payload = _build_payload(lembrete, occ, fatura_block)
     try:
-        resp = requests.post(N8N_WEBHOOK_URL, json=payload, timeout=N8N_TIMEOUT)
+        auth = (
+            (N8N_BASIC_USER, N8N_BASIC_PASS)
+            if N8N_BASIC_USER and N8N_BASIC_PASS
+            else None
+        )
+        resp = requests.post(
+            N8N_WEBHOOK_URL, json=payload, timeout=N8N_TIMEOUT, auth=auth
+        )
         data = {}
         try:
             data = resp.json()
@@ -336,8 +443,14 @@ def _dispatch_one(
 
 
 def _apply_backoff(now: datetime, tentativas_atual: int) -> datetime:
-    """
-    Calcula próxima tentativa aplicando backoff linear.
+    """Calcula o instante da próxima tentativa aplicando backoff linear.
+
+    Args:
+        now (datetime): Referência de tempo atual.
+        tentativas_atual (int): Número atual de tentativas (antes de incrementar).
+
+    Returns:
+        datetime: Próximo `scheduled_at` sugerido.
     """
     nxt_min = min(BACKOFF_BASE_MIN * max(1, tentativas_atual), BACKOFF_CAP_MIN)
     return now + timedelta(minutes=nxt_min)
@@ -349,12 +462,18 @@ def _apply_backoff(now: datetime, tentativas_atual: int) -> datetime:
 
 
 def tick_scheduler(db: Session) -> dict:
-    """
-    Executa um ciclo do scheduler:
-      1) Atualiza proxima_execucao_at dos lembretes candidatos
-      2) Materializa ocorrências na janela
-      3) Despacha pendentes vencidos (scheduled_at <= now)
-    Retorna métricas simples do ciclo.
+    """Executa um ciclo completo do scheduler.
+
+    Etapas:
+        1) Atualiza `proxima_execucao_at` para lembretes candidatos.
+        2) Materializa ocorrências na janela [now - TOLERANCE_SEC, now + LOOKAHEAD_MIN].
+        3) Despacha ocorrências pendentes vencidas (<= now), aplicando backoff e quiet hours.
+
+    Args:
+        db (Session): Sessão SQLAlchemy em transação controlada pelo chamador.
+
+    Returns:
+        dict: Métricas simples do ciclo (contadores e janela).
     """
     tz = _tz(TZ_DEFAULT)  # noqa: F841
     now = _now()

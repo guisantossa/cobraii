@@ -6,6 +6,7 @@ from app.v1.endpoints import (
     cobrancas,
     faturas,
     lembretes,
+    lembretes_callbacks,
 )
 from app.v1.endpoints import logs as logs_ep
 from app.v1.endpoints import templates, usuarios
@@ -51,3 +52,4 @@ api_router.include_router(
 )
 api_router.include_router(analytics.router, dependencies=[Depends(use_audit_context)])
 api_router.include_router(logs_ep.router, dependencies=[Depends(use_audit_context)])
+api_router.include_router(lembretes_callbacks.router)

@@ -1,4 +1,19 @@
 # app/scheduler/__init__.py
+
+"""
+Scheduler bootstrap para lembretes/cobranças.
+
+Responsabilidades:
+- Criar um singleton do APScheduler (BackgroundScheduler).
+- Registrar o job periódico que aciona `tick_scheduler`.
+- Integrar ciclo de vida ao FastAPI (startup/shutdown).
+
+Variáveis de ambiente relevantes:
+- SCHED_MAX_WORKERS: int, threads do executor (default: 4).
+- APP_TZ: str, timezone IANA (default: America/Sao_Paulo).
+- LEMBRETES_TICK_INTERVAL_MIN: int, minutos entre ticks (default: 1).
+"""
+
 from __future__ import annotations
 
 import logging
@@ -20,10 +35,15 @@ _scheduler: Optional[BackgroundScheduler] = None
 
 
 def _get_scheduler() -> BackgroundScheduler:
-    """
-    Cria (se necessário) e retorna uma instância singleton do BackgroundScheduler.
-    - JobStore em memória (suficiente para 1 instance).
-    - Executor thread pool leve.
+    """Retorna uma instância singleton de BackgroundScheduler.
+
+    Cria o scheduler caso ainda não exista, com:
+      - JobStore: memória (adequado a 1 instância do app).
+      - Executor: ThreadPoolExecutor leve.
+      - Defaults: coalesce, max_instances, misfire_grace_time.
+
+    Returns:
+        BackgroundScheduler: Instância única compartilhada no processo.
     """
     global _scheduler
     if _scheduler is not None:
@@ -38,7 +58,7 @@ def _get_scheduler() -> BackgroundScheduler:
     job_defaults = {
         "coalesce": True,  # se atrasar, roda uma vez consolidando
         "max_instances": 2,  # evita concorrência do mesmo job
-        "misfire_grace_time": 30,
+        "misfire_grace_time": 30,  # tolerância a "atraso" do agendador
     }
 
     _scheduler = BackgroundScheduler(
@@ -51,9 +71,13 @@ def _get_scheduler() -> BackgroundScheduler:
 
 
 def _tick_job():
-    """
-    Função chamada pelo APScheduler.
-    Abre uma sessão DB, executa o tick e fecha a sessão (sempre).
+    """Job invocado pelo APScheduler.
+
+    Abre uma sessão DB, executa `tick_scheduler` e garante fechamento.
+
+    Efeitos colaterais:
+        - Logs de métricas do ciclo.
+        - Persistência de mudanças em ocorrências/lembretes.
     """
     db = SessionLocal()
     try:
@@ -66,11 +90,17 @@ def _tick_job():
 
 
 def start_scheduler(app):
-    """
-    Pluga o scheduler no ciclo de vida do FastAPI.
-    Use no seu app.main:
+    """Conecta o scheduler ao ciclo de vida FastAPI.
+
+    Registra o job `lembretes_tick` com intervalo em minutos, inicia o
+    scheduler no startup e finaliza no shutdown.
+
+    Exemplo (app/main.py):
         from app.scheduler import start_scheduler
         start_scheduler(app)
+
+    Args:
+        app (FastAPI): Instância do seu aplicativo FastAPI.
     """
     sched = _get_scheduler()
     interval_min = int(os.getenv("LEMBRETES_TICK_INTERVAL_MIN", "1"))
