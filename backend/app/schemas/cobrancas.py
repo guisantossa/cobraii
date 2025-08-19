@@ -64,6 +64,7 @@ class CobrancaOut(CobrancaBase):
     data_criacao: datetime
     data_atualizacao: datetime
     cliente: Optional[ClienteMini] = None
+    tem_lembrete_ativo: bool = False
 
     class Config:
         from_attributes = True

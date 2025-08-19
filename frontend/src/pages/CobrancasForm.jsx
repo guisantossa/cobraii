@@ -4,6 +4,7 @@ import Button from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { Card } from '../components/ui/Card'
+import { Select } from '../components/ui/Select'
 import Autocomplete from '../components/ui/Autocomplete'
 import { getCobranca, createCobranca, updateCobranca } from '../services/cobrancas'
 import { getClientes } from '../services/clientes'
@@ -37,13 +38,11 @@ export default function CobrancasForm() {
   const [form, setForm] = useState({
     titulo: '',
     descricao: '',
-    cliente_tipo: 'pre', // 'pre' | 'avulso'
     cliente_id: '',
-    cliente_nome_avulso: '',
-    cliente_busca: '', // texto exibido no autocomplete
-    valor: '', // string mascarada BRL
+    cliente_busca: '',
+    valor: '',
     recorrencia: 'unica',
-    vencimento: '', // YYYY-MM-DD
+    vencimento: '',
   })
 
   const [clientes, setClientes] = useState([])
@@ -59,7 +58,7 @@ export default function CobrancasForm() {
         const { data } = await getClientes()
         if (mounted) setClientes(Array.isArray(data) ? data : [])
       } catch {
-        // silencioso; o form ainda permite avulso
+        // silencioso
       }
     })()
     return () => { mounted = false }
@@ -74,16 +73,13 @@ export default function CobrancasForm() {
         setLoading(true)
         const { data } = await getCobranca(id)
         if (mounted && data) {
-          const cliente_tipo = data.cliente_id ? 'pre' : 'avulso'
           const valorMasked = formatCurrencyBRL(data.valor)
           setForm(prev => ({
             ...prev,
             titulo: data.titulo || '',
             descricao: data.descricao || '',
-            cliente_tipo,
             cliente_id: data.cliente_id || '',
-            cliente_nome_avulso: data.cliente_nome_avulso || '',
-            cliente_busca: data.cliente_id ? '' : (data.cliente_nome_avulso || ''),
+            cliente_busca: '',
             valor: valorMasked,
             recorrencia: data.recorrencia || 'unica',
             vencimento: data.vencimento || '',
@@ -99,7 +95,7 @@ export default function CobrancasForm() {
     return () => { mounted = false }
   }, [id, isEdit])
 
-  // quando clientes carregarem e houver cliente_id, sincroniza o texto do autocomplete (apenas criação)
+  // quando clientes carregarem e houver cliente_id (criação), sincroniza o texto do autocomplete
   useEffect(() => {
     if (!form.cliente_id || !clientes?.length) return
     const found = clientes.find((c) => c.id === form.cliente_id)
@@ -114,12 +110,6 @@ export default function CobrancasForm() {
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  function handleChangeClienteTipo(e) {
-    if (isEdit) return // bloqueia alteração ao editar
-    const value = e.target.value
-    setForm((prev) => ({ ...prev, cliente_tipo: value, cliente_id: '', cliente_busca: '', cliente_nome_avulso: '' }))
-  }
-
   function handleChangeValor(e) {
     const raw = e.target.value
     const masked = formatCurrencyBRL(raw)
@@ -127,15 +117,14 @@ export default function CobrancasForm() {
   }
 
   function onClienteText(text) {
-    if (isEdit) return // bloqueia alteração ao editar
+    if (isEdit) return // impede troca de cliente ao editar
     setForm((prev) => ({ ...prev, cliente_busca: text, cliente_id: '' }))
   }
 
   function onClienteSelect(item) {
-    if (isEdit) return // bloqueia alteração ao editar
+    if (isEdit) return // impede troca de cliente ao editar
     setForm(prev => ({
       ...prev,
-      cliente_tipo: 'pre',
       cliente_id: item?.id || '',
       cliente_busca: item?.nome || ''
     }))
@@ -146,19 +135,13 @@ export default function CobrancasForm() {
     if (!p.vencimento) return 'Informe o vencimento'
     const valorNum = unmaskCurrencyBRL(p.valor)
     if (!valorNum || Number.isNaN(valorNum) || valorNum <= 0) return 'Valor inválido'
-
-    if (p.cliente_tipo === 'pre') {
-      if (!p.cliente_id) return 'Selecione um cliente (autocomplete)'
-    } else {
-      if (!p.cliente_nome_avulso?.trim()) return 'Informe o nome do cliente (avulso)'
-    }
+    if (!p.cliente_id) return 'Selecione um cliente (autocomplete)'
     return ''
   }
 
   function parseApiError(err) {
     const detail = err?.response?.data?.detail
     if (Array.isArray(detail)) {
-      // FastAPI ValidationError
       return detail
         .map(d => {
           const path = Array.isArray(d.loc) ? d.loc.join('.') : ''
@@ -176,28 +159,25 @@ export default function CobrancasForm() {
     setError('')
 
     try {
+      const msg = validatePayload(form)
+      if (msg) throw new Error(msg)
+
       const payload = {
         titulo: form.titulo?.trim(),
         descricao: form.descricao?.trim() || null,
-        cliente_id: form.cliente_tipo === 'pre' ? (form.cliente_id || null) : null,
-        cliente_nome_avulso: form.cliente_tipo === 'avulso'
-          ? (form.cliente_nome_avulso?.trim() || null)
-          : null,
+        cliente_id: form.cliente_id || null,
         valor: unmaskCurrencyBRL(form.valor),
         recorrencia: form.recorrencia ?? 'unica',
         vencimento: form.vencimento?.trim() ?? null,
       }
-
-      const msg = validatePayload(form)
-      if (msg) throw new Error(msg)
-
+      let saved
       if (isEdit) {
-        await updateCobranca(id, payload)
+        saved = await updateCobranca(id, payload)
       } else {
-        await createCobranca(payload)
+        saved = await createCobranca(payload)
       }
 
-      navigate('/cobrancas')
+      navigate(`/cobrancas/${saved.id}`)
     } catch (err) {
       setError(parseApiError(err))
     } finally {
@@ -213,15 +193,12 @@ export default function CobrancasForm() {
       return found?.nome || form.cliente_busca || ''
     })()
 
-    const label = 'Cliente'
-    const valor = form.cliente_tipo === 'pre' ? nomeClientePre : (form.cliente_nome_avulso || '-')
-
     return (
       <div className="md:col-span-2">
         <Label>Cliente</Label>
         <div className="mt-2 rounded-xl border bg-slate-50 px-4 py-3 text-slate-700">
-          <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-          <div className="mt-1 font-medium">{valor || '-'}</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Cliente</div>
+          <div className="mt-1 font-medium">{nomeClientePre || '-'}</div>
         </div>
       </div>
     )
@@ -253,58 +230,21 @@ export default function CobrancasForm() {
 
             {/* Cliente */}
             {!isEdit ? (
-              <>
-                <div className="md:col-span-2">
-                  <Label>Cliente</Label>
-                  <div className="flex items-center gap-4 mt-1">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="cliente_tipo"
-                        value="pre"
-                        checked={form.cliente_tipo === 'pre'}
-                        onChange={handleChangeClienteTipo}
-                        disabled={isEdit}
-                      />
-                      <span>Pré-cadastrado</span>
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="cliente_tipo"
-                        value="avulso"
-                        checked={form.cliente_tipo === 'avulso'}
-                        onChange={handleChangeClienteTipo}
-                        disabled={isEdit}
-                      />
-                      <span>Avulso</span>
-                    </label>
-                  </div>
-                </div>
-
-                {form.cliente_tipo === 'pre' ? (
-                  <div className="md:col-span-2">
-                    <Label htmlFor="cliente_busca">Selecionar Cliente</Label>
-                    <Autocomplete
-                      value={form.cliente_busca}
-                      onChangeText={onClienteText}
-                      onSelect={onClienteSelect}
-                      items={clientes}
-                      getItemLabel={(c) => c?.nome || ''}
-                      placeholder="Digite para buscar clientes..."
-                      inputProps={{ id: 'cliente_busca', name: 'cliente_busca', disabled: isEdit }}
-                    />
-                    {form.cliente_id === '' && form.cliente_busca && (
-                      <p className="text-xs text-slate-500 mt-1">Selecione um item da lista para vincular.</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="md:col-span-2">
-                    <Label htmlFor="cliente_nome_avulso">Nome do Cliente (avulso)</Label>
-                    <Input id="cliente_nome_avulso" name="cliente_nome_avulso" value={form.cliente_nome_avulso} onChange={handleChange} disabled={isEdit} />
-                  </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="cliente_busca">Cliente (obrigatório)</Label>
+                <Autocomplete
+                  value={form.cliente_busca}
+                  onChangeText={onClienteText}
+                  onSelect={onClienteSelect}
+                  items={clientes}
+                  getItemLabel={(c) => c?.nome || ''}
+                  placeholder="Digite para buscar clientes..."
+                  inputProps={{ id: 'cliente_busca', name: 'cliente_busca', required: true }}
+                />
+                {form.cliente_id === '' && form.cliente_busca && (
+                  <p className="text-xs text-slate-500 mt-1">Selecione um item da lista para vincular.</p>
                 )}
-              </>
+              </div>
             ) : (
               <ClienteReadOnly />
             )}
@@ -324,7 +264,7 @@ export default function CobrancasForm() {
 
             <div>
               <Label htmlFor="recorrencia">Recorrência</Label>
-              <select
+              <Select
                 id="recorrencia"
                 name="recorrencia"
                 value={form.recorrencia}
@@ -334,11 +274,11 @@ export default function CobrancasForm() {
                 {RECORRENCIAS.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
-              <Label htmlFor="vencimento">Vencimento</Label>
+              <Label htmlFor="vencimento">Próximo Vencimento</Label>
               <Input id="vencimento" name="vencimento" type="date" value={form.vencimento} onChange={handleChange} />
             </div>
 
@@ -350,7 +290,9 @@ export default function CobrancasForm() {
 
             <div className="md:col-span-2 flex justify-end gap-2 pt-2">
               <Button type="button" variant="ghost" onClick={() => navigate('/cobrancas')}>Cancelar</Button>
-              <Button type="submit" disabled={submitting}>{submitting ? 'Salvando...' : 'Salvar'}</Button>
+              <Button type="submit" disabled={submitting || !form.cliente_id}>
+                {submitting ? 'Salvando...' : 'Salvar'}
+              </Button>
             </div>
           </form>
         )}

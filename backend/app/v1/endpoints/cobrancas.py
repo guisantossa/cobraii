@@ -28,6 +28,7 @@ def obter(
     usuario: Usuario = Depends(get_current_user),
 ):
     obj = get_cobranca(db, usuario.id, cobranca_id)
+
     if not obj:
         raise HTTPException(status_code=404, detail="Cobrança não encontrada")
     return obj

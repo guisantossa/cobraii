@@ -5,6 +5,12 @@ export function getCobrancas() {
 }
 
 export function getCobranca(id) { return api.get(`/cobrancas/${id}`) }
-export function createCobranca(payload) { return api.post('/cobrancas/', payload) }
-export function updateCobranca(id, payload) { return api.put(`/cobrancas/${id}`, payload) }
+export async  function createCobranca(payload) { 
+  const {data} = await api.post('/cobrancas/', payload)
+  return data
+}
+export async  function updateCobranca(id, payload) {
+  const {data} = await api.put(`/cobrancas/${id}`, payload)
+  return data
+}
 export function deleteCobranca(id) { return api.delete(`/cobrancas/${id}`) }

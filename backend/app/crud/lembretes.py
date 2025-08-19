@@ -12,6 +12,7 @@ from app.models.lembretes import Lembrete
 from app.schemas.lembretes import LembreteCreate, LembreteUpdate, PreviewResponse
 from dateutil.rrule import rrulestr
 from fastapi import HTTPException
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 # =========================
@@ -134,6 +135,21 @@ def expand_offsets(
 
     execucoes.sort(key=lambda x: x[0])
     return execucoes[:limit]
+
+
+def existe_lembrete_ativo_para_cobranca(
+    db: Session, usuario_id: UUID, cobranca_id: UUID
+) -> bool:
+    """Retorna True se existir algum lembrete ativo ligado a faturas da cobrança."""
+    stmt = select(
+        exists().where(
+            (Lembrete.usuario_id == usuario_id)
+            & (Lembrete.ativa)
+            & (Lembrete.fatura_id == Fatura.id)
+            & (Fatura.cobranca_id == cobranca_id)
+        )
+    )
+    return db.execute(stmt).scalar()
 
 
 # =========================

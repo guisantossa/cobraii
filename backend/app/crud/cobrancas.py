@@ -3,9 +3,11 @@ from uuid import UUID as _UUID
 
 from app.audit.diff import diff_simple, obj_snapshot
 from app.audit.logger import audit_log
+from app.crud.lembretes import existe_lembrete_ativo_para_cobranca
 from app.models.cobrancas import Cobranca
 from app.models.enums import FaturaStatusEnum
 from app.models.faturas import Fatura
+from app.models.lembretes import Lembrete
 from app.schemas.cobrancas import CobrancaCreate, CobrancaUpdate
 from sqlalchemy.orm import Session, selectinload
 
@@ -93,21 +95,60 @@ def create_cobranca(db: Session, usuario_id: _UUID, data: CobrancaCreate) -> Cob
 
 
 def get_cobranca(db: Session, usuario_id: _UUID, cobranca_id: _UUID) -> Cobranca | None:
-    return (
+    cobranca = (
         db.query(Cobranca)
         .filter(Cobranca.id == cobranca_id, Cobranca.usuario_id == usuario_id)
         .first()
     )
+    if not cobranca:
+        return None
+
+    tem_lembrete_ativo = existe_lembrete_ativo_para_cobranca(
+        db, usuario_id, cobranca_id
+    )
+    setattr(cobranca, "tem_lembrete_ativo", bool(tem_lembrete_ativo))
+    return cobranca
 
 
 def list_cobrancas(db: Session, usuario_id: _UUID):
-    return (
+    # 1) Buscar as cobranças do usuário (com o que você já carrega)
+    cobrancas: list[Cobranca] = (
         db.query(Cobranca)
-        .options(selectinload(Cobranca.clientes))
+        .options(
+            selectinload(Cobranca.clientes)
+        )  # se for singular, use Cobranca.cliente
         .filter(Cobranca.usuario_id == usuario_id)
         .order_by(Cobranca.data_criacao.desc())
         .all()
     )
+
+    if not cobrancas:
+        return []
+
+    # 2) Pegar os IDs das cobranças
+    cobranca_ids = [c.id for c in cobrancas]
+
+    # 3) Descobrir, em UMA query, quais cobranças têm ALGUM lembrete ativo
+    #    via Fatura -> Lembrete(ativa=True), restrito ao usuário.
+    #    Opção A (mais portátil): DISTINCT
+    rows = (
+        db.query(Fatura.cobranca_id)
+        .join(Lembrete, Lembrete.fatura_id == Fatura.id)
+        .filter(
+            Fatura.cobranca_id.in_(cobranca_ids),
+            Lembrete.usuario_id == usuario_id,
+            Lembrete.ativa.is_(True),
+        )
+        .distinct()
+        .all()
+    )
+    cobrancas_com_ativo = {row[0] for row in rows}  # set de cobranca_id
+
+    # 4) Anexar a flag em memória (sem tocar no schema/colunas)
+    for c in cobrancas:
+        setattr(c, "tem_lembrete_ativo", c.id in cobrancas_com_ativo)
+
+    return cobrancas
 
 
 def update_cobranca(

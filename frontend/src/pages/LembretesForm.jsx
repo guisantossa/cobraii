@@ -137,7 +137,8 @@ export default function LembretesForm() {
         const l = await getLembrete(id)
         const isPeriodico = Boolean(l.rrule)
         if (mounted) {
-          setTipo(isPeriodico ? 'periodico' : 'fatura')
+          //setTipo(isPeriodico ? 'periodico' : 'fatura')
+          setTipo('periodico')
 
           // canais — backend entrega string; aqui tratamos como 1 canal selecionado
           setCanaisSel([l.canal].filter(Boolean))
@@ -469,12 +470,12 @@ export default function LembretesForm() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
-            {/* Abas */}
+            {/* Abas 
             <div className="flex gap-2">
               <Tab active={tipo === 'periodico'} onClick={() => switchTipo('periodico')}>Periódico (RRULE)</Tab>
               <Tab active={tipo === 'fatura'} onClick={() => switchTipo('fatura')}>Fatura (Lembretes relativos)</Tab>
             </div>
-
+            */}
             {/* Comuns */}
             <div>
               <Label>Cliente</Label>

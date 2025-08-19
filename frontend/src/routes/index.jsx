@@ -15,6 +15,7 @@ import Login from '../pages/Login'
 
 import Lembretes from '../pages/Lembretes'
 import LembretesForm from '../pages/LembretesForm'
+import LembretesOffsetsForm from '../pages/LembretesOffsetsForm'
 import LembretesView from '../pages/LembretesView'
 
 import Templates from '../pages/Templates'
@@ -53,6 +54,7 @@ export default function AppRoutes() {
         <Route path="/templates" element={<Templates />} />
         <Route path="/templates/novo" element={<TemplatesForm />} />
         <Route path="/templates/:id" element={<TemplatesForm />} />
+        <Route path="/lembretes/offsets/:id" element={<LembretesOffsetsForm />} />
                 
         
         <Route path="/lembretes" element={<Lembretes />} />

@@ -87,8 +87,18 @@ export default function CobrancasView() {
             <Button variant="ghost" onClick={() => navigate('/cobrancas')}>Voltar</Button>
             {/* Opcional: ação de editar poderia ir para /cobrancas/:id/editar */}
             <Button variant="secondary" onClick={() => navigate(`/cobrancas/editar/${id}`)}>Editar</Button>
-            <Button type="button" onClick={() => { /* sem ação por enquanto */ }}>
-              Criar lembrete
+            <Button
+              type="button"
+              onClick={() => navigate(`/lembretes/offsets/${id}`)}
+              disabled={!!cobranca?.tem_lembrete_ativo}
+              title={cobranca?.tem_lembrete_ativo ? "Já possui lembrete ativo" : "Criar lembrete"}
+              className={`flex items-center gap-1 px-3 py-2 rounded transition-colors ${
+                cobranca?.tem_lembrete_ativo
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'c-btn c-btn--ghost hover:bg-slate-100 text-slate-700'
+              }`}
+            >
+              { cobranca?.tem_lembrete_ativo ? 'Lembrete Criado' : 'Criar lembrete'} 
             </Button>
           </div>
         </div>
