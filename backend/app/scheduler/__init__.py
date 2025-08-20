@@ -23,10 +23,12 @@ import os
 from typing import Optional
 
 from app.db.session import SessionLocal  # ajuste se seu projeto usar outro nome
+from app.scheduler.jobs import job_marcar_faturas_atrasadas
 from app.scheduler.lembretes_tick import tick_scheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,15 @@ def start_scheduler(app):
                 replace_existing=True,
             )
             logger.info("Job 'lembretes_tick' registrado (cada %s min).", interval_min)
+            sched.add_job(
+                job_marcar_faturas_atrasadas,
+                trigger=CronTrigger(hour=2, minute=10),  # 02:10 BRT
+                id="faturas_atrasadas_diario",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=3600,  # tolera 1h se servidor acordar atrasado
+            )
         if not sched.running:
             sched.start()
             logger.info("Scheduler iniciado.")

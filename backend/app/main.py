@@ -2,8 +2,7 @@ import os
 
 from app.db.session import engine
 from app.models.models import Base
-
-# from app.scheduler import start_scheduler
+from app.scheduler import start_scheduler
 from app.v1 import routes
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(routes.api_router, prefix="/api/v1")
-# start_scheduler(app)
+start_scheduler(app)
 
 # Cria tabelas se não existirem (só pra dev)
 Base.metadata.create_all(bind=engine)

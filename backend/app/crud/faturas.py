@@ -7,6 +7,7 @@ from app.models.cobrancas import Cobranca
 from app.models.enums import FaturaStatusEnum
 from app.models.faturas import Fatura
 from app.schemas.faturas import FaturaCreate, FaturaUpdate
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 
@@ -173,3 +174,25 @@ def marcar_fatura_paga(
     db.commit()
     db.refresh(obj)
     return obj
+
+
+def marcar_faturas_atrasadas(db: Session) -> int:
+    """
+    Marca como 'atrasado' todas as faturas:
+      - com status 'pendente'
+      - e vencimento < hoje (CURRENT_DATE)
+    Retorna a quantidade de linhas afetadas.
+    """
+    stmt = (
+        update(Fatura)
+        .where(
+            Fatura.status == FaturaStatusEnum.pendente,
+            Fatura.vencimento < func.current_date(),
+        )
+        .values(status=FaturaStatusEnum.atrasado)
+        .execution_options(synchronize_session=False)
+    )
+
+    result = db.execute(stmt)
+    db.commit()
+    return result.rowcount or 0
