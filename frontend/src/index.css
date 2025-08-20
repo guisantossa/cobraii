@@ -3,3 +3,13 @@
 
 /* seus estilos globais abaixo, se quiser */
 html, body, #root { height: 100%; }
+
+:root {
+  --primary: #5E2CA5;        /* Roxo Cobraii */
+  --secondary: #4CAF50;      /* Verde cobra */
+  --accent: #FDD835;         /* Amarelo raio */
+  --text-main: #FFFFFF;      /* Texto principal */
+  --text-soft: #E0E0E0;      /* Texto suave */
+  --danger: #E53935;         /* Vermelho alerta */
+  --muted: #94a3b8;          /* Slate-400 p/ apoio */
+}

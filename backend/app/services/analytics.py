@@ -188,7 +188,7 @@ def conversao_envio_pagamento(
                 dp = data_pagamento
             else:
                 dp = datetime.combine(data_pagamento, datetime.min.time())
-            delta = (dp - enviado_at).days
+            delta = (dp.date() - enviado_at.date()).days
             if 0 <= delta <= int(janela_dias):
                 ok = True
         if ok:

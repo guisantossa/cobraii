@@ -10,6 +10,8 @@ import Clientes from '../pages/Clientes'
 import ClientesForm from '../pages/ClientesForm'
 import CobrancasView from '../pages/CobrancasView'
 import Relatorios from '../pages/Relatorios'
+import RelatoriosCobrancas from '../pages/RelatoriosCobrancas'
+import RelatoriosLembretes from '../pages/RelatoriosLembretes'
 import Logs from '../pages/Logs'
 import Login from '../pages/Login'
 
@@ -63,6 +65,8 @@ export default function AppRoutes() {
         <Route path="/lembretes/editar/:id" element={<LembretesForm />} />
 
         <Route path="/relatorios" element={<Relatorios />} />
+        <Route path="/relatorios/cobrancas" element={<RelatoriosCobrancas />} />
+        <Route path="/relatorios/lembretes" element={<RelatoriosLembretes />} />
         <Route path="/logs" element={<Logs />} />
 
 

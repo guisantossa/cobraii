@@ -1,7 +1,25 @@
 // src/components/AppShell.jsx
 import { useEffect, useState } from 'react'
 import { NavLink, Link, Outlet } from 'react-router-dom'
-import { LayoutGrid, Users, CreditCard, Bell, Settings, LogOut, Clock } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Users,
+  UserPlus,
+  CircleDollarSign,
+  ListOrdered,
+  BellPlus,
+  BellRing,
+  FilePlus,
+  Files,
+  BarChart3,
+  LineChart,
+  History,
+  ScrollText,
+  Settings,
+  LogOut,
+  Clock,
+} from 'lucide-react'
+
 import { getUsuarioLogado } from '../services/usuarios'
 import { useAuth } from '../auth/AuthContext'
 
@@ -10,13 +28,10 @@ export default function AppShell() {
   const [usuario, setUsuario] = useState({ nome: '' })
   const [dataHora, setDataHora] = useState('')
 
-
   // Busca apenas se houver token; desloga SOMENTE em 401/403
   useEffect(() => {
     if (!token) return
-
     let cancelled = false
-
     ;(async () => {
       try {
         const dados = await getUsuarioLogado()
@@ -30,7 +45,6 @@ export default function AppShell() {
         }
       }
     })()
-
     return () => { cancelled = true }
   }, [token, logout])
 
@@ -59,15 +73,49 @@ export default function AppShell() {
             <span className="font-bold text-lg">Cobraii</span>
           </Link>
         </div>
+
         <nav className="flex-1 p-2 space-y-1">
-          <SideItem to="/dashboard" icon={<LayoutGrid size={18} />}>Dashboard</SideItem>
-          <SideItem to="/clientes" icon={<Users size={18} />}>Clientes</SideItem>
-          <SideItem to="/cobrancas" icon={<CreditCard size={18} />}>Cobranças</SideItem>
-          <SideItem to="/lembretes" icon={<CreditCard size={18} />}>Lembretes</SideItem>
-          <SideItem to="/templates" icon={<CreditCard size={18} />}>Templates</SideItem>
-          <SideItem to="/relatorios" icon={<CreditCard size={18} />}>Relatórios</SideItem>
-          <SideItem to="/historicos" icon={<CreditCard size={18} />}>Histórico</SideItem>
-          <SideItem to="/logs" icon={<CreditCard size={18} />}>Logs</SideItem>
+          {/* Dashboard */}
+          <SideItem to="/dashboard" end icon={<LayoutDashboard size={18} />}>Dashboard</SideItem>
+
+          {/* Clientes */}
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Clientes
+          </div>
+          <SideItem to="/clientes/novo" end icon={<UserPlus size={18} />}>Adicionar</SideItem>
+          <SideItem to="/clientes" end icon={<Users size={18} />}>Listar</SideItem>
+
+          {/* Cobranças */}
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Cobranças
+          </div>
+          <SideItem to="/cobrancas/novo" end icon={<CircleDollarSign size={18} />}>Adicionar</SideItem>
+          <SideItem to="/cobrancas" end icon={<ListOrdered size={18} />}>Listar</SideItem>
+
+          {/* Lembretes */}
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Lembretes
+          </div>
+          <SideItem to="/lembretes/novo" end icon={<BellPlus size={18} />}>Adicionar</SideItem>
+          <SideItem to="/lembretes" end icon={<BellRing size={18} />}>Listar</SideItem>
+
+          {/* Templates */}
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Templates
+          </div>
+          <SideItem to="/templates/novo" end icon={<FilePlus size={18} />}>Adicionar</SideItem>
+          <SideItem to="/templates" end icon={<Files size={18} />}>Listar</SideItem>
+
+          {/* Relatórios */}
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Relatórios
+          </div>
+          <SideItem to="/relatorios/cobrancas" end icon={<BarChart3 size={18} />}>Cobranças</SideItem>
+          <SideItem to="/relatorios/lembretes" end icon={<LineChart size={18} />}>Lembretes</SideItem>
+
+          {/* Outros */}
+          <SideItem to="/historicos" end icon={<History size={18} />}>Histórico</SideItem>
+          <SideItem to="/logs" end icon={<ScrollText size={18} />}>Logs</SideItem>
         </nav>
       </aside>
 
@@ -113,16 +161,19 @@ export default function AppShell() {
   )
 }
 
-function SideItem({ to, icon, children }) {
+function SideItem({ to, icon, children, end = false }) {
   return (
     <NavLink
       to={to}
+      end={end}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-800 transition ${isActive ? 'bg-slate-800' : ''}`
+        `flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-800 transition ${
+          isActive ? 'bg-slate-800' : ''
+        }`
       }
     >
       {icon}
-      <span>{children}</span>
+      <span className="truncate">{children}</span>
     </NavLink>
   )
 }
