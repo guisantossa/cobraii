@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 from uuid import UUID as _UUID
 
 from app.audit.diff import diff_simple, obj_snapshot
@@ -7,7 +8,7 @@ from app.models.cobrancas import Cobranca
 from app.models.enums import FaturaStatusEnum
 from app.models.faturas import Fatura
 from app.schemas.faturas import FaturaCreate, FaturaUpdate
-from sqlalchemy import func, update
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 
@@ -176,23 +177,44 @@ def marcar_fatura_paga(
     return obj
 
 
-def marcar_faturas_atrasadas(db: Session) -> int:
+def marcar_faturas_atrasadas(db: Session, *, limit: Optional[int] = None) -> int:
     """
     Marca como 'atrasado' todas as faturas:
       - com status 'pendente'
       - e vencimento < hoje (CURRENT_DATE)
     Retorna a quantidade de linhas afetadas.
     """
-    stmt = (
-        update(Fatura)
-        .where(
+    q = (
+        db.query(Fatura)
+        .filter(
             Fatura.status == FaturaStatusEnum.pendente,
             Fatura.vencimento < func.current_date(),
         )
-        .values(status=FaturaStatusEnum.atrasado)
-        .execution_options(synchronize_session=False)
+        .order_by(Fatura.vencimento.asc())
     )
+    if limit:
+        q = q.limit(limit)
 
-    result = db.execute(stmt)
-    db.commit()
-    return result.rowcount or 0
+    afetadas = 0
+    for obj in q.yield_per(500):
+        antes = obj_snapshot(obj, ["status", "data_pagamento"])
+
+        obj.status = FaturaStatusEnum.atrasado
+        db.add(obj)
+        db.flush()
+
+        depois = obj_snapshot(obj, ["status", "data_pagamento"])
+        diff = diff_simple(antes, depois)
+
+        audit_log(
+            db,
+            entidade_tipo="fatura",
+            entidade_id=obj.id,
+            acao="overdue_marked",  # paralelo ao 'payment_received'
+            detalhes=_jsonify({"diff": diff}),
+        )
+        afetadas += 1
+
+    if afetadas:
+        db.commit()
+    return afetadas

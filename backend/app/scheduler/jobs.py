@@ -5,6 +5,17 @@ from zoneinfo import ZoneInfo
 
 from app.crud.faturas import marcar_faturas_atrasadas
 from app.db.session import SessionLocal
+from app.models import (  # noqa: F401  ← importante: este módulo deve importar TODOS os models
+    cobrancas,
+    faturas,
+    lembretes,
+    lembretes_ocorrencias,
+    templates,
+)
+from app.models.models import (  # noqa: F401  ← importante: este módulo deve importar TODOS os models
+    Cliente,
+    Usuario,
+)
 
 log = logging.getLogger(__name__)
 TZ = ZoneInfo("America/Sao_Paulo")

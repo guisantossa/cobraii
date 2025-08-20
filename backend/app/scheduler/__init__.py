@@ -108,6 +108,7 @@ def start_scheduler(app):
     interval_min = int(os.getenv("LEMBRETES_TICK_INTERVAL_MIN", "1"))
 
     def on_startup():
+        print("Start Tick Job")
         # Evita job duplicado se hot-reload
         if not sched.get_jobs():
             sched.add_job(
@@ -135,6 +136,7 @@ def start_scheduler(app):
         if sched and sched.running:
             sched.shutdown(wait=False)
             logger.info("Scheduler finalizado.")
+            print("Start Tick Job")
 
     app.add_event_handler("startup", on_startup)
     app.add_event_handler("shutdown", on_shutdown)
