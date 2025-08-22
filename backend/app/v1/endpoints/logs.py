@@ -1,4 +1,3 @@
-# app/v1/endpoints/logs.py
 from typing import Optional
 from uuid import UUID
 
@@ -17,7 +16,9 @@ def get_audit_logs(
     entidade_tipo: Optional[str] = Query(None),
     entidade_id: Optional[UUID] = Query(None),
     acao: Optional[str] = Query(None),
-    usuario_id: Optional[UUID] = Query(None, description="Filtra por ator específico"),
+    usuario_id: Optional[UUID] = Query(
+        None, description="Filtra por ator (apenas admin)"
+    ),
     desde: Optional[str] = Query(None, description="YYYY-MM-DD ou ISO"),
     ate: Optional[str] = Query(None, description="YYYY-MM-DD ou ISO"),
     page: int = Query(1, ge=1),
@@ -30,15 +31,16 @@ def get_audit_logs(
     """
     Retorna logs de auditoria com filtros e paginação.
     - scope='actor' (default): somente logs do usuário atual (e system se include_system=True)
-    - scope='all': sem filtro por ator (recomendado apenas para admin)
+    - scope='all': permitido apenas para admin; caso contrário, força 'actor'
+    - usuario_id: só é respeitado por admin com scope='all'
     """
     return list_audit_logs(
         db,
-        usuario.id,
+        usuario,  # passa o objeto Usuario
         entidade_tipo=entidade_tipo,
         entidade_id=entidade_id,
         acao=acao,
-        usuario_id=usuario_id,
+        usuario_id=usuario_id,  # hoje não usamos p/ restringir tenant; deixei por compat
         desde=desde,
         ate=ate,
         page=page,

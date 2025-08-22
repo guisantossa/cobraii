@@ -5,13 +5,16 @@ import { Pencil, Plus, Eye, Trash2, ChevronsLeft, ChevronLeft, ChevronRight, Che
 import Button from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
-import { Select } from '../components/ui/Select'
+import { Label } from '../components/ui/Label'
 import { listLembretes, deleteLembrete, previewLembrete } from '../services/lembretes'
 import { getClientes } from '../services/clientes'
 import { getCobrancas } from '../services/cobrancas'
 
 const PAGE_SIZE_DEFAULT = 20
-const CANAIS = ['whatsapp', 'email', 'sms']
+const CANAIS = ['whatsapp', 'email', 'sms']                      // ajuste se necessário
+const STATUS_ENVIO = ['pendente', 'enviado', 'falha']            // ajuste se necessário
+const TIPO_OPCOES = ['periodico', 'fatura']
+const ATIVO_OPCOES = ['ativo', 'inativo']
 
 export default function Lembretes() {
   const navigate = useNavigate()
@@ -23,12 +26,18 @@ export default function Lembretes() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // busca + filtros
-  const [busca, setBusca] = useState('')         // título/cliente
-  const [filtroTipo, setFiltroTipo] = useState('') // '', 'periodico', 'fatura'
-  const [filtroCanais, setFiltroCanais] = useState([]) // ['whatsapp','email','sms']
-  const [execIni, setExecIni] = useState('')     // yyyy-mm-dd
-  const [execFim, setExecFim] = useState('')     // yyyy-mm-dd
+  // busca + filtros (multi)
+  const [busca, setBusca] = useState('') // título/cliente
+  const [filters, setFilters] = useState({
+    canal: [],
+    status_envio: [],
+    tipo: [],
+    ativo: [], // 'ativo' | 'inativo'
+  })
+
+  // período próxima execução
+  const [execIni, setExecIni] = useState('')
+  const [execFim, setExecFim] = useState('')
 
   // paginação
   const [page, setPage] = useState(1)
@@ -104,15 +113,11 @@ export default function Lembretes() {
   // Título: se for fatura (sem rrule), preferir título da cobrança (id -> titulo)
   const getTitulo = (l) => {
     if (!l?.rrule) {
-      // 1) Embutido no objeto
       if (l?.cobranca?.titulo) return l.cobranca.titulo
-      // 2) Em meta
       if (l?.meta?.cobranca_titulo) return l.meta.cobranca_titulo
-      // 3) Resolver por ID mapeado
       const id = l?.cobranca_id || l?.meta?.cobranca_id
       if (id && cobrancasMap[id]) return cobrancasMap[id]
     }
-    // 4) fallback: próprio título do lembrete
     return l?.titulo || '-'
   }
 
@@ -124,7 +129,7 @@ export default function Lembretes() {
   // busca normalizada
   const qNorm = normalize(busca)
 
-  // Agrupar (tituloResolvido + cliente + tipo)
+  // Agrupar (tituloResolvido + cliente + tipo) e agregar estados
   const agrupadas = useMemo(() => {
     const map = {}
     for (const l of items) {
@@ -142,15 +147,21 @@ export default function Lembretes() {
           cliente_nome_resolved: clienteNome,
           tipo_resolved: tipo,
           canais: new Set([l.canal].filter(Boolean)),
+          status_envio_set: new Set([l.status_envio].filter(Boolean)), // se existir
           lembreteIds: [l.id],
           proxima_execucao_at: prox,
+          ativo_group: !!l.ativa,                 // true se algum ativo
+          all_inactive_group: !l.ativa,          // true se todos inativos
         }
       } else {
         if (l.canal) map[key].canais.add(l.canal)
+        if (l.status_envio) map[key].status_envio_set.add(l.status_envio)
         map[key].lembreteIds.push(l.id)
         if (prox && (!map[key].proxima_execucao_at || new Date(prox) < new Date(map[key].proxima_execucao_at))) {
           map[key].proxima_execucao_at = prox
         }
+        map[key].ativo_group = map[key].ativo_group || !!l.ativa
+        map[key].all_inactive_group = map[key].all_inactive_group && !l.ativa
       }
     }
 
@@ -165,26 +176,53 @@ export default function Lembretes() {
       })
     }
 
+    // normaliza flags finais
+    arr = arr.map((l) => ({
+      ...l,
+      ativo_resolved: l.ativo_group,
+      inativo_resolved: l.all_inactive_group,
+    }))
+
     return arr
   }, [items, qNorm, clientesMap, cobrancasMap])
 
-  // filtros: tipo, canais, próxima execução (entre)
+  // filtros (chips): tipo, canal, status_envio, ativo e janela de data
   const filtradas = useMemo(() => {
     return agrupadas.filter((l) => {
-      if (filtroTipo && l.tipo_resolved !== filtroTipo) return false
-      if (filtroCanais.length > 0) {
+      // tipo (chips)
+      if (filters.tipo.length && !filters.tipo.includes(l.tipo_resolved)) return false
+
+      // canais (chips) — requer que o grupo tenha todos os selecionados
+      if (filters.canal.length > 0) {
         const set = l.canais || new Set()
-        for (const ch of filtroCanais) if (!set.has(ch)) return false
+        for (const ch of filters.canal) if (!set.has(ch)) return false
       }
+
+      // status_envio (chips) — se não houver status, deixa passar quando nenhum estiver selecionado
+      if (filters.status_envio.length > 0) {
+        const set = l.status_envio_set || new Set()
+        for (const st of filters.status_envio) if (!set.has(st)) return false
+      }
+
+      // ativo/inativo (chips) — se marcar ambos, passa
+      if (filters.ativo.length === 1) {
+        if (filters.ativo[0] === 'ativo' && !l.ativo_resolved) return false
+        if (filters.ativo[0] === 'inativo' && !l.inativo_resolved) return false
+      }
+
+      // próxima execução entre datas
       const prox = l.proxima_execucao_at ? toStr(l.proxima_execucao_at) : ''
       if (execIni && (!prox || prox < execIni)) return false
       if (execFim && (!prox || prox > execFim)) return false
+
       return true
     })
-  }, [agrupadas, filtroTipo, filtroCanais, execIni, execFim])
+  }, [agrupadas, filters, execIni, execFim])
 
   // reset de página quando filtros mudam
-  useEffect(() => { setPage(1) }, [qNorm, filtroTipo, filtroCanais.join('|'), execIni, execFim])
+  useEffect(() => {
+    setPage(1)
+  }, [qNorm, JSON.stringify(filters), execIni, execFim])
 
   // paginação
   const total = filtradas.length
@@ -194,9 +232,20 @@ export default function Lembretes() {
   const endIndex = Math.min(startIndex + pageSize, total)
   const pageItems = filtradas.slice(startIndex, endIndex)
 
+  // === navegação por tipo (offset vs rrule) ===
+  const isOffsetBased = (l) => Array.isArray(l?.offsets) && l.offsets.length > 0
+  const isRruleBased  = (l) => !!l?.rrule
+  const routeEditById = (id) => {
+    const found = items.find((x) => x.id === id)
+    if (!found) return navigate(`/lembretes/editar/${id}`) // fallback
+    if (isOffsetBased(found)) return navigate(`/lembretes/offsets/${id}`) // LembretesOffsetsForm
+    if (isRruleBased(found))  return navigate(`/lembretes/editar/${id}`)  // LembretesForm
+    return navigate(`/lembretes/editar/${id}`)
+  }
+
   // ações
   const handleNovo = () => navigate('/lembretes/novo')
-  const handleEditar = (id) => navigate(`/lembretes/editar/${id}`)
+  const handleEditar = (id) => routeEditById(id)
   const handleView = (id) => navigate(`/lembretes/${id}`)
 
   async function handlePreview(ids) {
@@ -242,10 +291,20 @@ export default function Lembretes() {
   const goPrev = () => setPage((p) => Math.max(1, p - 1))
   const goNext = () => setPage((p) => Math.min(totalPages, p + 1))
   const goLast = () => setPage(totalPages)
-  const toggleCanal = (canal) => {
-    setFiltroCanais((prev) => prev.includes(canal) ? prev.filter((c) => c !== canal) : [...prev, canal])
+
+  // toggle multi (chips)
+  const toggleMulti = (key, value) => {
+    setFilters((prev) => {
+      const curr = prev[key] || []
+      const next = curr.includes(value) ? curr.filter((v) => v !== value) : [...curr, value]
+      return { ...prev, [key]: next }
+    })
   }
 
+  // util para estilo dos chips
+  const chipCls = (active) =>
+    `px-3 py-1 rounded-full border ${active ? 'bg-slate-900 text-white' : 'bg-white'}`
+  
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -253,58 +312,95 @@ export default function Lembretes() {
         <Button onClick={handleNovo}><Plus size={16}/> Novo Lembrete</Button>
       </div>
 
-      {/* Filtros em 12 colunas */}
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-15 gap-3 items-center">
-          {/* Busca (5 col) */}
-          <Input
-            placeholder="Buscar por título ou cliente"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="md:col-span-5"
-          />
-
-          {/* Tipo (2 col) */}
-          <Select
-            className="input md:col-span-2"
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
-            title="Tipo do lembrete"
-          >
-            <option value="">Tipo (todos)</option>
-            <option value="periodico">Periódico</option>
-            <option value="fatura">Fatura</option>
-          </Select>
-
-          {/* Canais (3 col) */}
-          <div className="md:col-span-3 flex items-center gap-3 flex-wrap">
-            {CANAIS.map((c) => (
-              <label key={c} className="flex items-center gap-2 text-sm capitalize">
-                <input
-                  type="checkbox"
-                  checked={filtroCanais.includes(c)}
-                  onChange={() => toggleCanal(c)}
-                />
-                {c}
-              </label>
-            ))}
+      {/* Filtros multi-linha */}
+      <Card className="p-4 space-y-4">
+        {/* Linha 1: Busca + Período */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div className="md:col-span-6">
+            <Label>Buscar</Label>
+            <Input
+              placeholder="Buscar por título ou cliente"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+            />
           </div>
+          <div className="md:col-span-6 flex items-end gap-2">
+            <div className="flex-1">
+              <Label>Próx. execução (de)</Label>
+              <Input type="date" value={execIni} onChange={(e) => setExecIni(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <Label>Próx. execução (até)</Label>
+              <Input type="date" value={execFim} onChange={(e) => setExecFim(e.target.value)} />
+            </div>
+          </div>
+        </div>
 
-          {/* Data de/até (2 col) */}
-          <div className="md:col-span-2 flex items-center gap-2">
-            <Input
-              type="date"
-              value={execIni}
-              onChange={(e) => setExecIni(e.target.value)}
-              title="Próxima execução a partir de"
-            />
-            <span className="text-slate-500 text-sm shrink-0">até</span>
-            <Input
-              type="date"
-              value={execFim}
-              onChange={(e) => setExecFim(e.target.value)}
-              title="Próxima execução até"
-            />
+        {/* Linha 2: Tipo + Status envio */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+          <div className="md:col-span-6">
+            <Label>Tipo</Label>
+            <div className="flex flex-wrap gap-2">
+              {TIPO_OPCOES.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleMulti('tipo', s)}
+                  className={chipCls(filters.tipo.includes(s))}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="md:col-span-6">
+            <Label>Status de envio</Label>
+            <div className="flex flex-wrap gap-2">
+              {STATUS_ENVIO.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleMulti('status_envio', s)}
+                  className={chipCls(filters.status_envio.includes(s))}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Linha 3: Canal + Ativo/Inativo */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+          <div className="md:col-span-6">
+            <Label>Canal</Label>
+            <div className="flex flex-wrap gap-2">
+              {CANAIS.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleMulti('canal', s)}
+                  className={chipCls(filters.canal.includes(s))}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="md:col-span-6">
+            <Label>Status (Ativo/Inativo)</Label>
+            <div className="flex flex-wrap gap-2">
+              {ATIVO_OPCOES.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleMulti('ativo', s)}
+                  className={chipCls(filters.ativo.includes(s))}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </Card>

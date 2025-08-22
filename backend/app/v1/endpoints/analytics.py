@@ -15,7 +15,7 @@ def overview(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    return svc.overview(db, desde, ate)
+    return svc.overview(db, usuario, desde, ate)
 
 
 @router.get("/envios-timeseries")
@@ -25,7 +25,7 @@ def envios_timeseries(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    return svc.envios_timeseries(db, desde, ate)
+    return svc.envios_timeseries(db, usuario, desde, ate)
 
 
 @router.get("/faturas-status")
@@ -35,7 +35,7 @@ def faturas_status(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    return svc.faturas_status_monthly(db, desde, ate)
+    return svc.faturas_status_monthly(db, usuario, desde, ate)
 
 
 @router.get("/conversao")
@@ -46,4 +46,4 @@ def conversao(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    return svc.conversao_envio_pagamento(db, desde, ate, janela_dias)
+    return svc.conversao_envio_pagamento(db, usuario, desde, ate, janela_dias)

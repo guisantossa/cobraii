@@ -32,27 +32,23 @@ export default function LembretesOffsetsForm() {
   const [cobranca, setCobranca] = useState(null)
   const [faturas, setFaturas] = useState([])
 
-  // campos do formulário (apenas offsets/fatura)
   const [form, setForm] = useState({
     cliente_id: '',
     fatura_id: '',
     titulo: '',
     corpo: '',
-    condicao: 'sempre',
-    relativos: [], // { quando: 'antes'|'depois', dias: number, hora: 'HH:MM', condicao?: 'sempre'|'se_nao_cumprido' }
+    condicao: 'sempre', // global (compat), offsets derivam do "quando"
+    relativos: [], // { quando: 'antes'|'depois', dias: number, hora: 'HH:MM' }
   })
 
-  // canais (múltiplos)
   const [canaisSel, setCanaisSel] = useState(['whatsapp'])
 
-  // ======= carregamento inicial =======
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         setLoading(true)
         setError('')
-        // 1) carrega cobrança + faturas
         const [cRes, fRes] = await Promise.all([
           getCobranca(cobrancaId),
           getFaturasByCobranca(cobrancaId),
@@ -65,18 +61,14 @@ export default function LembretesOffsetsForm() {
         setCobranca(c)
         setFaturas(fs)
 
-       
-
-        // 3) pré-preenche formulário a partir da cobrança
         setForm(prev => ({
           ...prev,
           cliente_id: c?.cliente_id || '',
-          // tenta selecionar a próxima fatura pendente por padrão (ou a primeira)
           fatura_id: pickDefaultFatura(fs),
           titulo: defaultTitulo(c),
           corpo: defaultCorpo(c),
           condicao: 'sempre',
-          relativos: defaultRelativos(fs),
+          relativos: defaultRelativos(),
         }))
       } catch (err) {
         if (!mounted) return
@@ -88,10 +80,8 @@ export default function LembretesOffsetsForm() {
     return () => { mounted = false }
   }, [cobrancaId])
 
-  // ======= defaults =======
   function pickDefaultFatura(fs) {
     if (!Array.isArray(fs) || fs.length === 0) return ''
-    // prioriza pendente (sem data_pagamento) mais próxima
     const pendentes = fs.filter(f => !f.data_pagamento)
     const base = pendentes.length ? pendentes : fs
     const sorted = [...base].sort((a, b) => (a.vencimento || '').localeCompare(b.vencimento || ''))
@@ -104,22 +94,19 @@ export default function LembretesOffsetsForm() {
   }
 
   function defaultCorpo(c) {
-    // simples e útil; usuário pode editar antes de salvar
     const base = c?.descricao || 'Sua fatura está próxima do vencimento.'
     return `Olá {{cliente.nome}}, ${base} Valor: {{fatura.valor}}. Vencimento: {{fatura.vencimento}}.`
   }
 
-  function defaultRelativos(fs) {
-    // regra leve: 3 lembretes = -3 dias, -1 dia, +1 dia (pós-vencimento)
-    // usuário pode editar/remover
+  function defaultRelativos() {
+    // condição é derivada do "quando": antes->sempre, depois->se_nao_cumprido
     return [
-      { quando: 'antes', dias: 3, hora: '09:00', condicao: 'sempre' },
-      { quando: 'antes', dias: 1, hora: '09:00', condicao: 'sempre' },
-      { quando: 'depois', dias: 1, hora: '09:00', condicao: 'se_nao_cumprido' },
+      { quando: 'antes', dias: 3, hora: '09:00' },
+      { quando: 'antes', dias: 1, hora: '09:00' },
+      { quando: 'depois', dias: 1, hora: '09:00' },
     ]
   }
 
-  // ======= handlers =======
   function handleChange(e) {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
@@ -132,7 +119,7 @@ export default function LembretesOffsetsForm() {
   function addRelativo() {
     setForm(f => ({
       ...f,
-      relativos: [...(f.relativos || []), { quando: 'antes', dias: 0, hora: '09:00', condicao: 'sempre' }],
+      relativos: [...(f.relativos || []), { quando: 'antes', dias: 0, hora: '09:00' }],
     }))
   }
 
@@ -143,12 +130,15 @@ export default function LembretesOffsetsForm() {
   function changeRelativo(idx, field, value) {
     setForm(f => {
       const arr = [...f.relativos]
-      arr[idx] = { ...arr[idx], [field]: value }
+      const curr = { ...arr[idx], [field]: value }
+      if (field === 'quando') {
+        curr.condicao = value === 'antes' ? 'sempre' : 'se_nao_cumprido'
+      }
+      arr[idx] = curr
       return { ...f, relativos: arr }
     })
   }
 
-  // ======= validação =======
   function validate() {
     if (bloqueadoMsg) return bloqueadoMsg
     if (!form.cliente_id) return 'Cliente não identificado.'
@@ -161,9 +151,6 @@ export default function LembretesOffsetsForm() {
       if (!['antes', 'depois'].includes(o.quando)) return `Relativo ${i + 1}: "quando" inválido.`
       if (typeof o.dias !== 'number' || o.dias < 0) return `Relativo ${i + 1}: "dias" inválido.`
       if (o.hora && !HHMM_RE.test(o.hora)) return `Relativo ${i + 1}: "hora" deve ser HH:MM.`
-      if (o.condicao && !['sempre', 'se_nao_cumprido'].includes(o.condicao)) {
-        return `Relativo ${i + 1}: "condição" inválida.`
-      }
     }
     return ''
   }
@@ -173,7 +160,7 @@ export default function LembretesOffsetsForm() {
       when: r.quando === 'antes' ? 'before' : 'after',
       days: Number(r.dias) || 0,
       hora: r.hora || '09:00',
-      condicao: r.condicao || 'sempre',
+      condicao: r.quando === 'antes' ? 'sempre' : 'se_nao_cumprido',
     }))
   }
 
@@ -186,7 +173,6 @@ export default function LembretesOffsetsForm() {
       const err = validate()
       if (err) throw new Error(err)
 
-      // fan-out por canal
       for (const canal of canaisSel) {
         const payload = buildPayloadFatura({
           cliente_id: form.cliente_id,
@@ -196,11 +182,8 @@ export default function LembretesOffsetsForm() {
           canal,
           offsets: mapRelativosToOffsets(),
           ativa: true,
-          condicao: form.condicao,
-          meta: {
-            origem: 'cobranca',
-            cobranca_id: cobrancaId,
-          },
+          condicao: 'sempre', // não usado por offset; cada item leva a sua condição derivada
+          meta: { origem: 'cobranca', cobranca_id: cobrancaId },
         })
         await createLembrete(payload)
       }
@@ -228,7 +211,7 @@ export default function LembretesOffsetsForm() {
       <Card className="p-5 max-w-3xl w-full">
         <div className="flex items-center justify-between mb-4">
           <h1 className="h1">Novo Lembrete (Offsets da Fatura)</h1>
-          <div className="flex gap-2">
+        <div className="flex gap-2">
             <Button variant="ghost" onClick={() => navigate(-1)}>Voltar</Button>
             <Button onClick={handleSubmit} disabled={submitting || !!bloqueadoMsg}>
               {submitting ? 'Salvando...' : 'Salvar'}
@@ -285,19 +268,6 @@ export default function LembretesOffsetsForm() {
                   ))}
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="condicao">Condição padrão</Label>
-                <Select
-                  id="condicao"
-                  name="condicao"
-                  value={form.condicao}
-                  onChange={handleChange}
-                  disabled={!!bloqueadoMsg}
-                >
-                  <option value="sempre">sempre</option>
-                  <option value="se_nao_cumprido">se_nao_cumprido</option>
-                </Select>
-              </div>
             </div>
 
             {/* Título/Corpo */}
@@ -348,7 +318,7 @@ export default function LembretesOffsetsForm() {
               {!canaisSel.length && <p className="text-xs text-red-600 mt-1">Selecione ao menos um canal.</p>}
             </div>
 
-            {/* Offsets */}
+            {/* Offsets — layout estável */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold">Lembretes relativos ao vencimento</h3>
@@ -360,8 +330,12 @@ export default function LembretesOffsetsForm() {
               ) : (
                 <div className="space-y-3">
                   {form.relativos.map((o, idx) => (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-[140px_1fr_1fr_1fr_100px] gap-3 items-end">
-                      <div>
+                    <div
+                      key={idx}
+                      className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end"
+                    >
+                      {/* Quando (md: 3 col) */}
+                      <div className="md:col-span-3">
                         <Label>Quando</Label>
                         <Select
                           value={o.quando}
@@ -372,7 +346,9 @@ export default function LembretesOffsetsForm() {
                           <option value="depois">depois</option>
                         </Select>
                       </div>
-                      <div>
+
+                      {/* Dias (md: 3 col) */}
+                      <div className="md:col-span-3">
                         <Label>Dias</Label>
                         <Input
                           type="number"
@@ -383,7 +359,9 @@ export default function LembretesOffsetsForm() {
                           disabled={!!bloqueadoMsg}
                         />
                       </div>
-                      <div>
+
+                      {/* Hora (md: 3 col) */}
+                      <div className="md:col-span-3">
                         <Label>Hora (HH:MM)</Label>
                         <Input
                           value={o.hora || ''}
@@ -395,19 +373,12 @@ export default function LembretesOffsetsForm() {
                           <p className="text-xs text-red-600 mt-1">Formato HH:MM</p>
                         )}
                       </div>
-                      <div>
-                        <Label>Condição</Label>
-                        <Select
-                          value={o.condicao || 'sempre'}
-                          onChange={(e) => changeRelativo(idx, 'condicao', e.target.value)}
-                          disabled={!!bloqueadoMsg}
-                        >
-                          <option value="sempre">sempre</option>
-                          <option value="se_nao_cumprido">se_nao_cumprido</option>
-                        </Select>
-                      </div>
-                      <div className="flex justify-end">
-                        <Button type="button" variant="danger" onClick={() => removeRelativo(idx)} disabled={!!bloqueadoMsg}>Remover</Button>
+
+                      {/* Remover (md: 3 col) */}
+                      <div className="md:col-span-3 flex md:justify-end">
+                        <Button type="button" variant="danger" onClick={() => removeRelativo(idx)} disabled={!!bloqueadoMsg}>
+                          Remover
+                        </Button>
                       </div>
                     </div>
                   ))}

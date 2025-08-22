@@ -1,6 +1,6 @@
 // src/pages/LembretesForm.jsx
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
@@ -18,17 +18,17 @@ import {
   getLembrete,
   previewLembrete,
   buildPayloadPeriodico,
-  buildPayloadFatura,
   CANAIS,
 } from '../services/lembretes'
 
 const HHMM_RE = /^\d{2}:\d{2}$/
 const SP_OFFSET = '-03:00' // horário fixo SP
 
-// faturas por cliente
-async function getFaturasByCliente(clienteId) {
-  const { data } = await api.get(`/faturas/?cliente_id=${clienteId}`)
-  return Array.isArray(data) ? data : []
+// === helpers api locais ===
+async function getClienteById(clienteId) {
+  if (!clienteId) return null
+  const { data } = await api.get(`/clientes/${clienteId}`)
+  return data
 }
 
 const FREQS = [
@@ -46,43 +46,40 @@ const WEEKDAYS = [
 export default function LembretesForm() {
   const navigate = useNavigate()
   const { id } = useParams()
+  const [search] = useSearchParams()
   const isEdit = useMemo(() => Boolean(id), [id])
 
-  // 'periodico' | 'fatura'
-  const [tipo, setTipo] = useState('periodico')
-
-  const [clientes, setClientes] = useState([])
-  const [faturas, setFaturas] = useState([])
+  // Somente PERIÓDICO neste form
   const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
+  // cliente
+  const [clientes, setClientes] = useState([])              // lista para "Novo"
+  const [clienteId, setClienteId] = useState(search.get('cliente_id') || '')
+  const [clienteNome, setClienteNome] = useState('')        // exibição e preenchimento
+
   // canais múltiplos
-  const [canaisSel, setCanaisSel] = useState([]) // ['whatsapp','email',...]
+  const [canaisSel, setCanaisSel] = useState([])
 
   const [form, setForm] = useState({
     // comuns
-    cliente_id: '',
-    cliente_busca: '',
     titulo: '',
     corpo: '',
-
     ativa: true,
     meta: {},
 
-    // periódico (Início = data + hora)
-    inicio_data: '',       // YYYY-MM-DD
-    inicio_hora: '09:00',  // HH:MM
-    rrule: '',             // string gerada pelo builder
-    rrule_freq: 'MONTHLY',
-    rrule_dias_semana: [], // ['MO','WE'] se semanal
+    // cliente (apenas para NOVO; edição fica travado)
+    cliente_busca: '',
 
-    // fatura
-    fatura_id: '',
-    condicao: 'sempre',
-    relativos: [], // UI-friendly (antes/depois) -> depois mapeamos para offsets
+    // periódico
+    inicio_data: '',             // YYYY-MM-DD  (mostrado novamente)
+    inicio_hora: '09:00',        // HH:MM (step 10 min)
+    rrule: '',                   // gerada pelo builder
+    rrule_freq: 'MONTHLY',
+    rrule_dias_semana: [],       // ['MO','WE'] se semanal
   })
 
   // === Templates (importar para o corpo) ===
@@ -122,28 +119,31 @@ export default function LembretesForm() {
     setTimeout(() => setTplInfo(''), 3000)
   }
 
-  // carregar clientes +, se edição, dados do lembrete
+  // carregar dados (cliente + lembrete quando edição) e lista de clientes quando novo
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const { data: cli } = await getClientes()
-        if (mounted) setClientes(Array.isArray(cli) ? cli : [])
-      } catch { /* silencioso */ }
+        if (isEdit) {
+          setLoading(true)
+          const l = await getLembrete(id)
 
-      if (!isEdit) return
-      try {
-        setLoading(true)
-        const l = await getLembrete(id)
-        const isPeriodico = Boolean(l.rrule)
-        if (mounted) {
-          //setTipo(isPeriodico ? 'periodico' : 'fatura')
-          setTipo('periodico')
+          // cliente travado na edição
+          const cid = l.cliente_id || clienteId
+          setClienteId(cid || '')
+          const nome = l?.cliente?.nome || l?.cliente_nome_avulso
+          if (nome) setClienteNome(nome)
+          else if (cid) {
+            try {
+              const cli = await getClienteById(cid)
+              if (mounted) setClienteNome(cli?.nome || '')
+            } catch { /* silencioso */ }
+          }
 
-          // canais — backend entrega string; aqui tratamos como 1 canal selecionado
+          // canais -> array
           setCanaisSel([l.canal].filter(Boolean))
 
-          // dtstart -> quebra em data/hora
+          // pega data e hora de dtstart
           let inicio_data = ''
           let inicio_hora = '09:00'
           if (l.dtstart) {
@@ -154,64 +154,43 @@ export default function LembretesForm() {
             inicio_hora = `${hh}:${mm}`
           }
 
-          // relativos (UI) a partir de offsets (before/after -> antes/depois)
-          let relativos = []
-          if (Array.isArray(l.offsets)) {
-            relativos = l.offsets.map(o => ({
-              quando: o.when === 'before' ? 'antes' : 'depois',
-              dias: Number(o.days) || 0,
-              hora: o.hora || '09:00',
-              condicao: o.condicao || 'sempre',
-            }))
-          }
-
           setForm(prev => ({
             ...prev,
-            cliente_id: l.cliente_id || '',
-            cliente_busca: '',
             titulo: l.titulo || '',
             corpo: l.corpo || '',
             ativa: l.ativa ?? true,
             meta: l.meta || {},
-
             inicio_data,
             inicio_hora,
             rrule: l.rrule || '',
             rrule_freq: inferFreqFromRRule(l.rrule) || 'MONTHLY',
             rrule_dias_semana: inferByDayFromRRule(l.rrule),
-
-            fatura_id: l.fatura_id || '',
-            condicao: l.condicao || 'sempre',
-            relativos,
           }))
-        }
-        if (!isPeriodico && l.cliente_id) {
-          const fs = await getFaturasByCliente(l.cliente_id)
-          if (mounted) setFaturas(fs)
+        } else {
+          // NOVO: cliente livre (lista + opcionalmente pré-seleciona por ?cliente_id)
+          try {
+            const { data } = await getClientes()
+            if (mounted) setClientes(Array.isArray(data) ? data : (data?.items ?? []))
+          } catch { if (mounted) setClientes([]) }
+
+          if (clienteId) {
+            try {
+              const cli = await getClienteById(clienteId)
+              if (mounted) {
+                setClienteNome(cli?.nome || '')
+                setForm(f => ({ ...f, cliente_busca: cli?.nome || '' }))
+              }
+            } catch { /* silencioso */ }
+          }
         }
       } catch (err) {
-        if (mounted) setError(err?.response?.data?.detail || 'Falha ao carregar lembrete')
+        if (mounted) setError(err?.response?.data?.detail || 'Falha ao carregar o formulário')
       } finally {
         if (mounted) setLoading(false)
       }
     })()
     return () => { mounted = false }
-  }, [id, isEdit])
-
-  // ao escolher cliente na aba fatura, carrega faturas
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      if (tipo !== 'fatura' || !form.cliente_id) { setFaturas([]); return }
-      try {
-        const fs = await getFaturasByCliente(form.cliente_id)
-        if (mounted) setFaturas(fs)
-      } catch {
-        if (mounted) setFaturas([])
-      }
-    })()
-    return () => { mounted = false }
-  }, [tipo, form.cliente_id])
+  }, [id, isEdit, clienteId])
 
   // ======== helpers RRULE ========
   function inferFreqFromRRule(rr) {
@@ -234,11 +213,10 @@ export default function LembretesForm() {
     return parts.join(';')
   }
   useEffect(() => {
-    if (tipo === 'periodico') {
-      setForm(f => ({ ...f, rrule: buildRRuleString() }))
-    }
+    // sempre atualizar RRULE quando freq/dias/hora mudarem
+    setForm(f => ({ ...f, rrule: buildRRuleString() }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, form.rrule_freq, form.rrule_dias_semana, form.inicio_hora])
+  }, [form.rrule_freq, form.rrule_dias_semana, form.inicio_hora])
 
   // ======== handlers ========
   function handleChange(e) {
@@ -246,20 +224,12 @@ export default function LembretesForm() {
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
   }
   function handleClienteText(text) {
-    setForm(prev => ({ ...prev, cliente_busca: text, cliente_id: '' }))
+    setForm(prev => ({ ...prev, cliente_busca: text }))
   }
   function handleClienteSelect(item) {
-    setForm(prev => ({ ...prev, cliente_id: item?.id || '', cliente_busca: item?.nome || '' }))
-  }
-  function switchTipo(novo) {
-    setTipo(novo)
-    if (novo === 'periodico') {
-      // limpar fatura
-      setForm(f => ({ ...f, fatura_id: '', condicao: 'sempre', relativos: [] }))
-    } else {
-      // limpar rrule
-      setForm(f => ({ ...f, rrule: '', rrule_dias_semana: [] }))
-    }
+    setClienteId(item?.id || '')
+    setClienteNome(item?.nome || '')
+    setForm(prev => ({ ...prev, cliente_busca: item?.nome || '' }))
   }
 
   // canais múltiplos
@@ -267,65 +237,30 @@ export default function LembretesForm() {
     setCanaisSel(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])
   }
 
-  // relativos (antes/depois)
-  function addRelativo() {
-    setForm(f => ({
-      ...f,
-      relativos: [...(f.relativos || []), { quando: 'antes', dias: 0, hora: '09:00', condicao: 'sempre' }],
-    }))
-  }
-  function removeRelativo(idx) {
-    setForm(f => ({ ...f, relativos: f.relativos.filter((_, i) => i !== idx) }))
-  }
-  function changeRelativo(idx, field, value) {
-    setForm(f => {
-      const arr = [...f.relativos]
-      arr[idx] = { ...arr[idx], [field]: value }
-      return { ...f, relativos: arr }
-    })
-  }
-
   // ======== validação ========
   function validate() {
-    if (!form.cliente_id) return 'Selecione um cliente.'
+    if (!clienteId) return 'Selecione um cliente.'
     if (!form.titulo?.trim()) return 'Informe o título.'
     if (!canaisSel.length) return 'Selecione ao menos um canal.'
-    if (tipo === 'periodico') {
-      if (!form.inicio_data) return 'Informe a data de início.'
-      if (!HHMM_RE.test(form.inicio_hora || '')) return 'Hora de início inválida (HH:MM).'
-      if (!form.rrule?.trim()) return 'Configure a recorrência (RRULE).'
-    } else {
-      if (!form.fatura_id) return 'Selecione a fatura.'
-      if (!Array.isArray(form.relativos) || form.relativos.length === 0) return 'Adicione ao menos um lembrete relativo.'
-      for (let i = 0; i < form.relativos.length; i++) {
-        const o = form.relativos[i]
-        if (!['antes', 'depois'].includes(o.quando)) return `Relativo ${i + 1}: "quando" inválido.`
-        if (typeof o.dias !== 'number' || o.dias < 0) return `Relativo ${i + 1}: "dias" inválido.`
-        if (o.hora && !HHMM_RE.test(o.hora)) return `Relativo ${i + 1}: "hora" deve ser HH:MM.`
-        if (o.condicao && !['sempre', 'se_nao_cumprido'].includes(o.condicao)) {
-          return `Relativo ${i + 1}: "condição" inválida.`
-        }
-      }
-    }
+
+    // data obrigatória
+    if (!form.inicio_data) return 'Informe a data de início.'
+
+    // hora obrigatória (passos de 10 minutos)
+    if (!HHMM_RE.test(form.inicio_hora || '')) return 'Hora inválida (HH:MM).'
+    const [, mmStr] = form.inicio_hora.split(':')
+    const mm = parseInt(mmStr, 10)
+    if (Number.isNaN(mm) || (mm % 10) !== 0) return 'A hora deve estar em intervalos de 10 minutos (ex.: 09:00, 09:10, 09:20).'
+
+    if (!form.rrule?.trim()) return 'Configure a recorrência (RRULE).'
     return ''
   }
 
-  // monta dtstart ISO a partir de data + hora (SP fixo)
+  // monta dtstart ISO usando a data + hora escolhidas
   function makeDtStartISO() {
     const d = form.inicio_data
     const h = form.inicio_hora || '09:00'
-    if (!d) return ''
     return `${d}T${h}:00${SP_OFFSET}`
-  }
-
-  // mapeia relativos -> offsets backend
-  function mapRelativosToOffsets() {
-    return (form.relativos || []).map(r => ({
-      when: r.quando === 'antes' ? 'before' : 'after',
-      days: Number(r.dias) || 0,
-      hora: r.hora || '09:00',
-      condicao: r.condicao || 'sempre',
-    }))
   }
 
   // ======== submit ========
@@ -342,32 +277,17 @@ export default function LembretesForm() {
       if (!isEdit) {
         for (let i = 0; i < canaisSel.length; i++) {
           const canal = canaisSel[i]
-          if (tipo === 'periodico') {
-            const payload = buildPayloadPeriodico({
-              cliente_id: form.cliente_id,
-              titulo: form.titulo,
-              corpo: form.corpo,
-              canal,
-              rrule: form.rrule || buildRRuleString(),
-              dtstart: makeDtStartISO(),
-              ativa: form.ativa,
-              meta: form.meta,
-            })
-            await createLembrete(payload)
-          } else {
-            const payload = buildPayloadFatura({
-              cliente_id: form.cliente_id,
-              fatura_id: form.fatura_id,
-              titulo: form.titulo,
-              corpo: form.corpo,
-              canal,
-              offsets: mapRelativosToOffsets(),
-              ativa: form.ativa,
-              condicao: form.condicao,
-              meta: form.meta,
-            })
-            await createLembrete(payload)
-          }
+          const payload = buildPayloadPeriodico({
+            cliente_id: clienteId,
+            titulo: form.titulo,
+            corpo: form.corpo,
+            canal,
+            rrule: form.rrule || buildRRuleString(),
+            dtstart: makeDtStartISO(),
+            ativa: form.ativa,
+            meta: form.meta,
+          })
+          await createLembrete(payload)
         }
         navigate('/lembretes')
         return
@@ -377,39 +297,20 @@ export default function LembretesForm() {
       const [canalFirst, ...rest] = canaisSel.length ? canaisSel : [undefined]
       if (!canalFirst) throw new Error('Selecione ao menos um canal.')
 
-      if (tipo === 'periodico') {
-        const payload = {
-          cliente_id: form.cliente_id,
-          titulo: form.titulo,
-          corpo: form.corpo,
-          canal: canalFirst,
-          rrule: form.rrule || buildRRuleString(),
-          dtstart: makeDtStartISO(),
-          ativa: form.ativa,
-          meta: form.meta,
-        }
-        await updateLembrete(id, payload)
-        for (const extra of rest) {
-          const p2 = { ...payload, canal: extra }
-          await createLembrete(p2)
-        }
-      } else {
-        const payload = {
-          cliente_id: form.cliente_id,
-          fatura_id: form.fatura_id,
-          titulo: form.titulo,
-          corpo: form.corpo,
-          canal: canalFirst,
-          offsets: mapRelativosToOffsets(),
-          ativa: form.ativa,
-          condicao: form.condicao,
-          meta: form.meta,
-        }
-        await updateLembrete(id, payload)
-        for (const extra of rest) {
-          const p2 = { ...payload, canal: extra }
-          await createLembrete(p2)
-        }
+      const payload = {
+        cliente_id: clienteId,
+        titulo: form.titulo,
+        corpo: form.corpo,
+        canal: canalFirst,
+        rrule: form.rrule || buildRRuleString(),
+        dtstart: makeDtStartISO(),
+        ativa: form.ativa,
+        meta: form.meta,
+      }
+      await updateLembrete(id, payload)
+      for (const extra of rest) {
+        const p2 = { ...payload, canal: extra }
+        await createLembrete(p2)
       }
 
       navigate('/lembretes')
@@ -433,24 +334,11 @@ export default function LembretesForm() {
     }
   }
 
-  // ======== UI ========
-  function Tab({ active, onClick, children }) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`px-4 py-2 rounded-t-xl border ${active ? 'bg-white border-b-white font-semibold' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
-      >
-        {children}
-      </button>
-    )
-  }
-
   return (
     <div className="flex justify-center">
       <Card className="p-5 max-w-3xl w-full">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="h1">{isEdit ? 'Editar Lembrete' : 'Novo Lembrete'}</h1>
+          <h1 className="h1">{isEdit ? 'Editar Lembrete (Periódico)' : 'Novo Lembrete (Periódico)'}</h1>
           <div className="flex items-center gap-2">
             {isEdit && <Button variant="secondary" onClick={handlePreview}>Preview</Button>}
             <Button variant="ghost" onClick={() => navigate('/lembretes')}>Cancelar</Button>
@@ -470,26 +358,24 @@ export default function LembretesForm() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
-            {/* Abas 
-            <div className="flex gap-2">
-              <Tab active={tipo === 'periodico'} onClick={() => switchTipo('periodico')}>Periódico (RRULE)</Tab>
-              <Tab active={tipo === 'fatura'} onClick={() => switchTipo('fatura')}>Fatura (Lembretes relativos)</Tab>
-            </div>
-            */}
-            {/* Comuns */}
+            {/* Cliente: travado na edição; livre (Autocomplete) em novo */}
             <div>
               <Label>Cliente</Label>
-              <Autocomplete
-                value={form.cliente_busca}
-                onChangeText={handleClienteText}
-                onSelect={handleClienteSelect}
-                items={clientes}
-                getItemLabel={(c) => c?.nome || ''}
-                placeholder="Digite para buscar clientes..."
-                inputProps={{ id: 'cliente_busca', name: 'cliente_busca' }}
-              />
-              {!form.cliente_id && form.cliente_busca && (
-                <p className="text-xs text-slate-500 mt-1">Selecione um item da lista para vincular.</p>
+              {isEdit ? (
+                <div className="p-2 rounded border bg-slate-50">{clienteNome || '—'}</div>
+              ) : (
+                <Autocomplete
+                  value={form.cliente_busca}
+                  onChangeText={handleClienteText}
+                  onSelect={handleClienteSelect}
+                  items={clientes}
+                  getItemLabel={(c) => c?.nome || ''}
+                  placeholder="Digite para buscar clientes..."
+                  inputProps={{ id: 'cliente_busca', name: 'cliente_busca' }}
+                />
+              )}
+              {!clienteId && (
+                <p className="text-xs text-red-600 mt-1">Selecione um cliente.</p>
               )}
             </div>
 
@@ -552,178 +438,83 @@ export default function LembretesForm() {
               {!canaisSel.length && <p className="text-xs text-red-600 mt-1">Selecione ao menos um canal.</p>}
             </div>
 
-            {/* Específico de cada aba */}
-            {tipo === 'periodico' ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="inicio_data">Início (data)</Label>
-                    <Input
-                      id="inicio_data"
-                      name="inicio_data"
-                      type="date"
-                      value={form.inicio_data}
-                      onChange={handleChange}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="inicio_hora">Início (hora)</Label>
-                    <Input
-                      id="inicio_hora"
-                      name="inicio_hora"
-                      value={form.inicio_hora}
-                      onChange={handleChange}
-                      placeholder="09:00"
-                    />
-                    {!HHMM_RE.test(form.inicio_hora || '') && (
-                      <p className="text-xs text-red-600 mt-1">Formato HH:MM</p>
-                    )}
-                  </div>
-                </div>
+            {/* Início: data + hora (hora com step 10 min) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="inicio_data">Data de início</Label>
+                <Input
+                  id="inicio_data"
+                  name="inicio_data"
+                  type="date"
+                  value={form.inicio_data}
+                  onChange={handleChange}
+                />
+                {!form.inicio_data && (
+                  <p className="text-xs text-red-600 mt-1">Obrigatório.</p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="inicio_hora">Horário (passos de 10 min)</Label>
+                <Input
+                  id="inicio_hora"
+                  name="inicio_hora"
+                  type="time"
+                  step={600}
+                  value={form.inicio_hora}
+                  onChange={handleChange}
+                />
+                {(!HHMM_RE.test(form.inicio_hora || '') || (parseInt((form.inicio_hora || '00:00').split(':')[1], 10) % 10 !== 0)) && (
+                  <p className="text-xs text-red-600 mt-1">Formato HH:MM e múltiplos de 10 minutos.</p>
+                )}
+              </div>
+            </div>
 
-                {/* RRULE Builder */}
-                <div className="border rounded p-3">
-                  <div className="font-medium mb-2">Recorrência</div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label>Frequência</Label>
-                      <Select
-                        value={form.rrule_freq}
-                        onChange={(e) => setForm(f => ({ ...f, rrule_freq: e.target.value }))}
-                      >
-                        {FREQS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </Select>
+            {/* RRULE Builder */}
+            <div className="border rounded p-3">
+              <div className="font-medium mb-2">Recorrência</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label>Frequência</Label>
+                  <Select
+                    value={form.rrule_freq}
+                    onChange={(e) => setForm(f => ({ ...f, rrule_freq: e.target.value }))}
+                  >
+                    {FREQS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </Select>
+                </div>
+                {form.rrule_freq === 'WEEKLY' && (
+                  <div className="md:col-span-2">
+                    <Label>Dias da semana</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {WEEKDAYS.map(d => {
+                        const active = form.rrule_dias_semana.includes(d.v)
+                        return (
+                          <button
+                            type="button"
+                            key={d.v}
+                            onClick={() => {
+                              setForm(f => {
+                                const set = new Set(f.rrule_dias_semana)
+                                active ? set.delete(d.v) : set.add(d.v)
+                                return { ...f, rrule_dias_semana: Array.from(set) }
+                              })
+                            }}
+                            className={`px-2 py-1 rounded border text-sm ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-300'}`}
+                          >
+                            {d.l}
+                          </button>
+                        )
+                      })}
                     </div>
-                    {form.rrule_freq === 'WEEKLY' && (
-                      <div className="md:col-span-2">
-                        <Label>Dias da semana</Label>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {WEEKDAYS.map(d => {
-                            const active = form.rrule_dias_semana.includes(d.v)
-                            return (
-                              <button
-                                type="button"
-                                key={d.v}
-                                onClick={() => {
-                                  setForm(f => {
-                                    const set = new Set(f.rrule_dias_semana)
-                                    active ? set.delete(d.v) : set.add(d.v)
-                                    return { ...f, rrule_dias_semana: Array.from(set) }
-                                  })
-                                }}
-                                className={`px-2 py-1 rounded border text-sm ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-300'}`}
-                              >
-                                {d.l}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-3">
-                    <Label>RRULE gerada</Label>
-                    <Input value={form.rrule || buildRRuleString()} readOnly />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="fatura_id">Fatura</Label>
-                    <Select
-                      id="fatura_id"
-                      name="fatura_id"
-                      value={form.fatura_id}
-                      onChange={handleChange}
-                      disabled={!form.cliente_id}
-                    >
-                      <option value="">{form.cliente_id ? 'Selecione...' : 'Selecione antes um cliente'}</option>
-                      {faturas.map(f => (
-                        <option key={f.id} value={f.id}>
-                          {f.vencimento} — R$ {Number(f.valor).toFixed(2)} ({f.status})
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="condicao">Condição (default)</Label>
-                    <Select
-                      id="condicao"
-                      name="condicao"
-                      value={form.condicao}
-                      onChange={handleChange}
-                    >
-                      <option value="sempre">sempre</option>
-                      <option value="se_nao_cumprido">se_nao_cumprido</option>
-                    </Select>
-                    <p className="text-xs text-slate-500 mt-1">Cada lembrete relativo pode sobrescrever essa condição.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Lembretes relativos ao vencimento</h3>
-                  <Button type="button" variant="secondary" onClick={addRelativo}>Adicionar</Button>
-                </div>
-
-                {(form.relativos || []).length === 0 ? (
-                  <div className="text-slate-500">Nenhum lembrete relativo adicionado.</div>
-                ) : (
-                  <div className="space-y-3">
-                    {form.relativos.map((o, idx) => (
-                      <div key={idx} className="grid grid-cols-1 md:grid-cols-[140px_1fr_1fr_1fr_100px] gap-3 items-end">
-                        <div>
-                          <Label>Quando</Label>
-                          <Select
-                            value={o.quando}
-                            onChange={(e) => changeRelativo(idx, 'quando', e.target.value)}
-                          >
-                            <option value="antes">antes</option>
-                            <option value="depois">depois</option>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Dias</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={o.dias}
-                            onChange={(e) => changeRelativo(idx, 'dias', Number(e.target.value))}
-                            placeholder="0"
-                          />
-                        </div>
-                        <div>
-                          <Label>Hora (HH:MM)</Label>
-                          <Input
-                            value={o.hora || ''}
-                            onChange={(e) => changeRelativo(idx, 'hora', e.target.value)}
-                            placeholder="09:00"
-                          />
-                          {!(!o.hora || HHMM_RE.test(o.hora)) && (
-                            <p className="text-xs text-red-600 mt-1">Formato HH:MM</p>
-                          )}
-                        </div>
-                        <div>
-                          <Label>Condição</Label>
-                          <Select
-                            value={o.condicao || 'sempre'}
-                            onChange={(e) => changeRelativo(idx, 'condicao', e.target.value)}
-                          >
-                            <option value="sempre">sempre</option>
-                            <option value="se_nao_cumprido">se_nao_cumprido</option>
-                          </Select>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button type="button" variant="danger" onClick={() => removeRelativo(idx)}>Remover</Button>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>
-            )}
+
+              <div className="mt-3">
+                <Label>RRULE gerada</Label>
+                <Input value={form.rrule || buildRRuleString()} readOnly />
+              </div>
+            </div>
 
             {error && (
               <div className="mt-2 p-3 rounded bg-red-100 text-red-700 border border-red-200">

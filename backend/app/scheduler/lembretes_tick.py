@@ -301,31 +301,38 @@ def _compute_next_execution(
 def _occurrences_in_window(
     db: Session, lembrete: Lembrete, start: datetime, end: datetime
 ) -> List[datetime]:
-    """Lista ocorrências de um lembrete que caem na janela [start, end].
+    tz = _tz(lembrete.tz or "America/Sao_Paulo")
 
-    Args:
-        db (Session): Sessão SQLAlchemy.
-        lembrete (Lembrete): Registro alvo.
-        start (datetime): Início.
-        end (datetime): Fim.
+    # normaliza bordas p/ mesmo TZ (se vierem naive)
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=tz)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=tz)
 
-    Returns:
-        List[datetime]: Ocorrências na janela.
-    """
     if lembrete.rrule:
-        return _between_rrule(lembrete, start, end)
+        occs = _between_rrule(lembrete, start, end)
+    else:
+        if not lembrete.fatura_id or not lembrete.offsets:
+            return []
+        venc_dt, status_pago, _ = _fatura_info(
+            db, lembrete.usuario_id, lembrete.fatura_id, lembrete.tz
+        )
+        all_dt = [
+            dt for (dt, _) in expand_offsets(lembrete, venc_dt, status_pago, limit=50)
+        ]
+        # normaliza cada dt p/ mesmo TZ antes do filtro
+        norm = [(dt if dt.tzinfo else dt.replace(tzinfo=tz)) for dt in all_dt]
+        occs = [dt for dt in norm if start <= dt <= end]
 
-    # fatura/offsets
-    if not lembrete.fatura_id or not lembrete.offsets:
-        return []
+    # garante incluir a própria próxima execução quando estiver na janela
+    nxt = lembrete.proxima_execucao_at
+    if nxt is not None:
+        if nxt.tzinfo is None:
+            nxt = nxt.replace(tzinfo=tz)
+        if start <= nxt <= end and nxt not in occs:
+            occs.append(nxt)
 
-    venc_dt, status_pago, _ = _fatura_info(
-        db, lembrete.usuario_id, lembrete.fatura_id, lembrete.tz
-    )
-    all_dt = [
-        dt for (dt, _) in expand_offsets(lembrete, venc_dt, status_pago, limit=50)
-    ]
-    return [dt for dt in all_dt if start <= dt <= end]
+    return occs
 
 
 def _create_occurrence_if_missing(
@@ -399,8 +406,26 @@ def _build_payload(
         payload["fatura"] = fatura_info
 
     # Assinatura HMAC (se houver segredo)
-    payload["assinatura"] = _hmac_signature(payload)
+    # payload["assinatura"] = _hmac_signature(payload)
     return payload
+
+
+def _inativar_sem_proxima(db: Session, now: datetime):
+    """Inativa lembretes que não têm mais próxima execução."""
+    candidatos = db.query(Lembrete).filter(Lembrete.ativa.is_(True)).all()
+
+    desativados = 0
+    for lembrete in candidatos:
+        nxt = _compute_next_execution(db, lembrete, now)
+
+        if nxt is None:
+            lembrete.ativa = False
+            db.add(lembrete)
+            desativados += 1
+
+    if desativados:
+        db.commit()
+    return desativados
 
 
 def _dispatch_one(
@@ -416,6 +441,7 @@ def _dispatch_one(
     Returns:
         Tuple[bool, dict]: (sucesso, resposta_json_ou_erro).
     """
+    print("entrou")
     if not N8N_WEBHOOK_URL:
         return False, {"error": "N8N_WEBHOOK_URL não configurada"}
 
@@ -475,12 +501,11 @@ def tick_scheduler(db: Session) -> dict:
     Returns:
         dict: Métricas simples do ciclo (contadores e janela).
     """
+
     tz = _tz(TZ_DEFAULT)  # noqa: F841
     now = _now()
-
     start_window = now - timedelta(seconds=TOLERANCE_SEC)
     end_window = now + timedelta(minutes=LOOKAHEAD_MIN)
-
     stats = {
         "updated_next": 0,
         "occ_created": 0,
@@ -503,18 +528,36 @@ def tick_scheduler(db: Session) -> dict:
     )
 
     for lembrete in candidatos:
-        nxt = _compute_next_execution(db, lembrete, now)
+        if (
+            lembrete.proxima_execucao_at is not None
+            and start_window <= lembrete.proxima_execucao_at <= end_window
+        ):
+            continue
+        nxt = _compute_next_execution(db, lembrete, end_window + timedelta(seconds=1))
         if nxt != lembrete.proxima_execucao_at:
             lembrete.proxima_execucao_at = nxt
             db.add(lembrete)
             stats["updated_next"] += 1
 
     db.flush()
-
+    desativados = _inativar_sem_proxima(db, now)
+    if desativados:
+        print(f"[tick] inativados {desativados} lembretes sem próxima execução")
     # 2) Materializa ocorrências na janela
-    ativos = db.query(Lembrete).filter(Lembrete.ativa.is_(True)).all()
+    ativos = (
+        db.query(Lembrete)
+        .filter(
+            Lembrete.ativa.is_(True),
+            Lembrete.proxima_execucao_at.isnot(None),
+            Lembrete.proxima_execucao_at <= end_window,
+        )
+        .order_by(Lembrete.proxima_execucao_at.asc())
+        .limit(DISPATCH_BATCH_LIMIT)
+        .all()
+    )
 
     for lembrete in ativos:
+        print(lembrete.id, lembrete.titulo, lembrete.proxima_execucao_at)
         occs = _occurrences_in_window(db, lembrete, start_window, end_window)
 
         for dt_sched in occs:
@@ -554,7 +597,9 @@ def tick_scheduler(db: Session) -> dict:
     )
 
     for occ in pendentes:
+
         lembrete = db.query(Lembrete).filter(Lembrete.id == occ.lembrete_id).first()
+
         if not lembrete:
             # cancela se lembrete sumiu
             occ.status = "cancelado"

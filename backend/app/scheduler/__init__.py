@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 # from datetime import datetime
 from typing import Optional
@@ -81,14 +82,19 @@ def _tick_job():
         - Logs de métricas do ciclo.
         - Persistência de mudanças em ocorrências/lembretes.
     """
+    print("ticker jobs")
+    t0 = time.perf_counter()
     db = SessionLocal()
     try:
         stats = tick_scheduler(db)
+        print(f"[tick] stats={stats}")
         logger.info("[LembretesTick] %s", stats)
     except Exception as e:
         logger.exception("Erro no tick_scheduler: %s", e)
     finally:
         db.close()
+        t1 = time.perf_counter()
+        print(f"[tick] TOTAL: {(t1 - t0):.3f}s")
 
 
 def start_scheduler(app):
@@ -110,6 +116,8 @@ def start_scheduler(app):
     def on_startup():
         print("Start Tick Job")
         # Evita job duplicado se hot-reload
+        from datetime import datetime
+
         if not sched.get_jobs():
             sched.add_job(
                 _tick_job,
@@ -117,6 +125,7 @@ def start_scheduler(app):
                 minutes=interval_min,
                 id="lembretes_tick",
                 replace_existing=True,
+                next_run_time=datetime.now(),
             )
             logger.info("Job 'lembretes_tick' registrado (cada %s min).", interval_min)
             sched.add_job(
