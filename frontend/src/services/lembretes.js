@@ -235,3 +235,12 @@ export function buildPayloadFatura({
     meta,
   }
 }
+
+// Best-effort: tenta ler 'total', senão conta items.
+export async function getLembretesAtivosCount() {
+  const { data } = await api.get('/lembretes?page=1&page_size=1&ativa=true')
+  if (typeof data?.total === 'number') return data.total
+  if (Array.isArray(data?.items)) return data.items.length
+  if (Array.isArray(data)) return data.length
+  return null
+}

@@ -24,6 +24,8 @@ import Templates from '../pages/Templates'
 import TemplatesForm from '../pages/TemplatesForm'
 
 import Register from '../pages/UsuarioRegistro.jsx'
+import UsuarioForm from '../pages/UsuarioForm.jsx'
+import Onboarding from '../pages/Onboarding.jsx'
 function Layout() {
   return (
     <PrivateRoute>
@@ -43,6 +45,8 @@ export default function AppRoutes() {
       {/* Protegidas com layout */}
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/onboarding" element={<Onboarding  />} />
+        <Route path="/configuracoes" element={<UsuarioForm  />} />
 
 
         <Route path="/cobrancas" element={<Cobrancas />} />

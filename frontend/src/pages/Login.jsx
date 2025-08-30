@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../auth/AuthContext'
-
+import { afterLoginRedirect } from '../utils/afterLoginRedirect'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
@@ -28,7 +28,7 @@ export default function Login() {
         transformRequest: [(d) => d],
       })
       login(data.access_token)
-      navigate('/dashboard')
+      await afterLoginRedirect(navigate)
     } catch (err) {
       const mensagem = err.response?.data?.detail || 'Erro ao fazer login'
       setErro(mensagem)

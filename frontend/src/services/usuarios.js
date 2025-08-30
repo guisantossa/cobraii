@@ -12,3 +12,7 @@ export async function createUsuario(payload) {
   return data;
 }
 
+export async function updateUsuarioMe(payload) {
+  const { data } = await api.put('/usuarios/me', payload) // ajuste para PATCH se necessário
+  return data
+}

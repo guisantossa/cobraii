@@ -101,7 +101,7 @@ export default function UsuariosRegister() {
       await createUsuario(payload);
 
       // pós-criação: ir para login
-      navigate('/login');
+      navigate('/login?next=/onboarding');
     } catch (err) {
       const msg =
         err?.response?.data?.detail ||

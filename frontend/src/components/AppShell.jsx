@@ -1,6 +1,6 @@
 // src/components/AppShell.jsx
 import { useEffect, useState } from 'react'
-import { NavLink, Link, Outlet } from 'react-router-dom'
+import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   Users,
@@ -27,6 +27,7 @@ export default function AppShell() {
   const { token, logout } = useAuth()
   const [usuario, setUsuario] = useState({ nome: '' })
   const [dataHora, setDataHora] = useState('')
+  const navigate = useNavigate()
 
   // Busca apenas se houver token; desloga SOMENTE em 401/403
   useEffect(() => {
@@ -134,7 +135,7 @@ export default function AppShell() {
             </span>
             <button
               type="button"
-              onClick={() => alert('Abrir configurações')}
+              onClick={() => navigate('/configuracoes')}
               className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-[var(--border)] hover:bg-slate-50 transition"
               aria-label="Configurações"
               title="Configurações"
