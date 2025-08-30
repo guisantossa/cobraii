@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import AppRoutes from './routes'
 import Sidebar from './components/Sidebar'
 import Navbar from './components/Navbar'
+import FeedbackFab from './components/feedback/FeedbackFab'
 
 function Layout() {
   const { isAuthenticated } = useAuth()
@@ -27,7 +28,9 @@ function App() {
       <AuthProvider>
         <Layout />
       </AuthProvider>
+      <FeedbackFab origem="layout" />
     </BrowserRouter>
+    
   )
 }
 

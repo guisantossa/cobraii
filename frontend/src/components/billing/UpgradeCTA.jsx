@@ -1,22 +1,46 @@
 // src/components/billing/UpgradeCTA.jsx
 import { X } from 'lucide-react'
-import Button from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
+import Button from '../ui/Button'            // <-- corrigido (era ../../components/ui/Button)
+import { Card } from '../ui/Card'            // <-- corrigido (era ../../components/ui/Card)
+import { sendFeedback } from '../../services/feedback'
 
 export default function UpgradeCTA({ visible, onClose, reason }) {
   if (!visible) return null
 
-  const goPlanos = () => {
-    // leve para sua página de planos/assinatura
+  const goPlanos = async (trigger = 'cta_button') => {
+    // registra telemetria (não bloqueia)
+    try {
+      await sendFeedback({
+        tipo: 'upgrade_reason',
+        rating: null,
+        comentario: reason || 'Usuário abriu upgrade a partir do CTA',
+        origem: 'upgrade_cta',
+        contexto: { path: window.location.pathname, trigger },
+      })
+    } catch {}
+
     const from = encodeURIComponent(window.location.pathname)
     window.location.href = `/planos?from=${from}`
   }
 
+  const dismiss = async () => {
+    try {
+      await sendFeedback({
+        tipo: 'upgrade_reason',
+        rating: null,
+        comentario: 'Usuário fechou o CTA de upgrade',
+        origem: 'upgrade_cta',
+        contexto: { path: window.location.pathname, trigger: 'dismiss' },
+      })
+    } catch {}
+    onClose?.()
+  }
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-      <Card className="w-full max-w-3xl p-5 relative">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={dismiss}>
+      <Card className="w-full max-w-3xl p-5 relative" onClick={(e) => e.stopPropagation()}>
         <button
-          onClick={onClose}
+          onClick={dismiss}
           className="absolute top-3 right-3 text-slate-500 hover:text-slate-700"
           aria-label="Fechar"
         >
@@ -34,6 +58,7 @@ export default function UpgradeCTA({ visible, onClose, reason }) {
             itens={['WhatsApp', '2 lembretes ativos', 'Suporte básico']}
             destaque={false}
             disabled
+            onSelect={() => goPlanos('card_free')}
           />
           <PlanoCard
             titulo="Start"
@@ -41,7 +66,7 @@ export default function UpgradeCTA({ visible, onClose, reason }) {
             detalhe="/mês (ou R$ 4,99/m no anual)"
             itens={['WhatsApp, Email, SMS', '10 lembretes ativos', 'Suporte padrão']}
             destaque
-            onSelect={goPlanos}
+            onSelect={() => goPlanos('card_start')}
           />
           <PlanoCard
             titulo="Pro"
@@ -49,13 +74,13 @@ export default function UpgradeCTA({ visible, onClose, reason }) {
             detalhe="/mês (ou R$ 9,99/m no anual)"
             itens={['Todos os canais', 'Lembretes ilimitados', 'Suporte prioritário']}
             destaque={false}
-            onSelect={goPlanos}
+            onSelect={() => goPlanos('card_pro')}
           />
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Agora não</Button>
-          <Button onClick={goPlanos}>Ver planos</Button>
+          <Button variant="ghost" onClick={dismiss}>Agora não</Button>
+          <Button onClick={() => goPlanos('cta_button')}>Ver planos</Button>
         </div>
       </Card>
     </div>

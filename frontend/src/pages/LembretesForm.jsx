@@ -9,6 +9,7 @@ import Autocomplete from '../components/ui/Autocomplete'
 import { Select } from '../components/ui/Select'
 import { Textarea } from '../components/ui/Textarea'
 import UpgradeCTA from '../components/billing/UpgradeCTA'
+import { sendFeedback } from '../services/feedback'
 
 import api from '../services/api'
 import { getClientes } from '../services/clientes'
@@ -324,6 +325,13 @@ export default function LembretesForm() {
       if (status === 403) {
         setLimitMsg(detail)
         setShowUpgrade(true)
+        sendFeedback({
+          tipo: 'upgrade_reason',
+          rating: null,
+          comentario: detail,
+          origem: 'upgrade_cta',
+          contexto: { path: window.location.pathname }
+        }).catch(() => {})
       } else {
         setError(detail)
       }

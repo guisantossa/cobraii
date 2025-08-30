@@ -5,6 +5,7 @@ from app.v1.endpoints import (
     clientes,
     cobrancas,
     faturas,
+    feedbacks,
     lembretes,
     lembretes_callbacks,
 )
@@ -48,6 +49,12 @@ api_router.include_router(
     templates.router,
     prefix="/templates",
     tags=["Templates"],
+    dependencies=[Depends(use_audit_context)],
+)
+api_router.include_router(
+    feedbacks.router,
+    prefix="/feedbacks",
+    tags=["Feedbacks"],
     dependencies=[Depends(use_audit_context)],
 )
 api_router.include_router(planos.router, prefix="/planos", tags=["Planos"])
