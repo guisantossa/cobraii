@@ -21,6 +21,7 @@ from app.schemas.lembretes import (
     PreviewResponse,
 )
 from app.schemas.lembretes_ocorrencias import LembreteOcorrenciaOut
+from app.services.plan_limits import assert_can_create_lembrete
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
@@ -33,6 +34,7 @@ def create_lembrete(
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
 ):
+    assert_can_create_lembrete(db, usuario, data.canal)
     return criar_lembrete(db, usuario.id, data)
 
 

@@ -21,7 +21,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status;
-    if ((status === 401 || status === 403) && !isRedirecting) {
+    if ((status === 401 ) && !isRedirecting) {
       isRedirecting = true;
       try {
         localStorage.removeItem('cobraii_token');

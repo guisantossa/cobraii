@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card'
 import Autocomplete from '../components/ui/Autocomplete'
 import { Select } from '../components/ui/Select'
 import { Textarea } from '../components/ui/Textarea'
+import UpgradeCTA from '../components/billing/UpgradeCTA'
 
 import api from '../services/api'
 import { getClientes } from '../services/clientes'
@@ -48,6 +49,9 @@ export default function LembretesForm() {
   const { id } = useParams()
   const [search] = useSearchParams()
   const isEdit = useMemo(() => Boolean(id), [id])
+
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [limitMsg, setLimitMsg] = useState('')
 
   // Somente PERIÓDICO neste form
   const [loading, setLoading] = useState(isEdit)
@@ -265,7 +269,7 @@ export default function LembretesForm() {
 
   // ======== submit ========
   async function handleSubmit(e) {
-    e.preventDefault()
+    if (e && e.preventDefault) e.preventDefault()
     setSubmitting(true)
     setError('')
 
@@ -315,7 +319,14 @@ export default function LembretesForm() {
 
       navigate('/lembretes')
     } catch (err) {
-      setError(err?.response?.data?.detail || err?.message || 'Falha ao salvar lembrete')
+      const status = err?.response?.status
+      const detail = err?.response?.data?.detail || 'Falha ao criar lembrete.'
+      if (status === 403) {
+        setLimitMsg(detail)
+        setShowUpgrade(true)
+      } else {
+        setError(detail)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -342,6 +353,7 @@ export default function LembretesForm() {
           <div className="flex items-center gap-2">
             {isEdit && <Button variant="secondary" onClick={handlePreview}>Preview</Button>}
             <Button variant="ghost" onClick={() => navigate('/lembretes')}>Cancelar</Button>
+            {/* Botão fora do <form>: chama handleSubmit manualmente */}
             <Button onClick={handleSubmit} disabled={submitting}>
               {submitting ? 'Salvando...' : 'Salvar'}
             </Button>
@@ -524,7 +536,8 @@ export default function LembretesForm() {
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="ghost" onClick={() => navigate('/lembretes')}>Cancelar</Button>
-              <Button type="submit" disabled={submitting} onClick={handleSubmit}>
+              {/* Botão dentro do <form>: submit via onSubmit */}
+              <Button type="submit" disabled={submitting}>
                 {submitting ? 'Salvando...' : 'Salvar'}
               </Button>
             </div>
@@ -570,6 +583,13 @@ export default function LembretesForm() {
           </Card>
         </div>
       )}
+
+      {/* CTA de upgrade (sempre disponível para abrir quando 403) */}
+      <UpgradeCTA
+        visible={showUpgrade}
+        reason={limitMsg}
+        onClose={() => setShowUpgrade(false)}
+      />
     </div>
   )
 }
