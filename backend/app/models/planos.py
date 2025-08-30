@@ -1,5 +1,5 @@
 # app/models/planos.py
-from app.db.base_class import Base  # ajuste se o seu Base for diferente
+from app.db.base import Base  # ajuste se o seu Base for diferente
 from sqlalchemy import Boolean, Column, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship

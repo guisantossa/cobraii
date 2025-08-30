@@ -1,7 +1,7 @@
 # app/crud/planos.py
 from typing import List, Optional
 
-from app.models.models import Plano
+from app.models.planos import Plano
 from sqlalchemy.orm import Session
 
 
