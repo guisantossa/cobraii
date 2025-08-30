@@ -9,7 +9,7 @@ from app.v1.endpoints import (
     lembretes_callbacks,
 )
 from app.v1.endpoints import logs as logs_ep
-from app.v1.endpoints import relatorios, templates, usuarios
+from app.v1.endpoints import planos, relatorios, templates, usuarios
 from fastapi import APIRouter, Depends
 
 api_router = APIRouter()
@@ -50,6 +50,7 @@ api_router.include_router(
     tags=["Templates"],
     dependencies=[Depends(use_audit_context)],
 )
+api_router.include_router(planos.router, prefix="/planos", tags=["Planos"])
 api_router.include_router(analytics.router, dependencies=[Depends(use_audit_context)])
 api_router.include_router(logs_ep.router, dependencies=[Depends(use_audit_context)])
 api_router.include_router(lembretes_callbacks.router)

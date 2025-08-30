@@ -25,6 +25,12 @@ class Usuario(Base):
     faturas = relationship(
         "Fatura", back_populates="usuarios", cascade="all, delete-orphan"
     )
+    plano_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("planos.id", onupdate="CASCADE", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    plano = relationship("Plano", back_populates="usuarios")
 
 
 class Cliente(Base):

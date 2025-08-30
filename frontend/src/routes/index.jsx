@@ -23,6 +23,7 @@ import LembretesView from '../pages/LembretesView'
 import Templates from '../pages/Templates'
 import TemplatesForm from '../pages/TemplatesForm'
 
+import Register from '../pages/UsuarioRegistro.jsx'
 function Layout() {
   return (
     <PrivateRoute>
@@ -38,7 +39,7 @@ export default function AppRoutes() {
     <Routes>
       {/* Pública */}
       <Route path="/login" element={<Login />} />
-
+      <Route path="/register" element={<Register />} />
       {/* Protegidas com layout */}
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />

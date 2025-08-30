@@ -84,14 +84,14 @@ export default function AppShell() {
           </div>
           <SideItem to="/clientes/novo" end icon={<UserPlus size={18} />}>Adicionar</SideItem>
           <SideItem to="/clientes" end icon={<Users size={18} />}>Listar</SideItem>
-
-          {/* Cobranças */}
+          
+          {/* Cobranças 
           <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             Cobranças
           </div>
           <SideItem to="/cobrancas/novo" end icon={<CircleDollarSign size={18} />}>Adicionar</SideItem>
           <SideItem to="/cobrancas" end icon={<ListOrdered size={18} />}>Listar</SideItem>
-
+          */}
           {/* Lembretes */}
           <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             Lembretes
@@ -110,7 +110,7 @@ export default function AppShell() {
           <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             Relatórios
           </div>
-          <SideItem to="/relatorios/cobrancas" end icon={<BarChart3 size={18} />}>Cobranças</SideItem>
+          {/*<SideItem to="/relatorios/cobrancas" end icon={<BarChart3 size={18} />}>Cobranças</SideItem> /*}
           <SideItem to="/relatorios/lembretes" end icon={<LineChart size={18} />}>Lembretes</SideItem>
 
           {/* Outros */}

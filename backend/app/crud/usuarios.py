@@ -1,6 +1,7 @@
 # app/crud/usuarios.py
 from app.audit.logger import audit_log
 from app.core.security import hash_password, verify_password
+from app.crud.planos import get_plano_by_nome
 from app.models.models import Usuario
 from app.schemas.usuarios import UsuarioCreate
 from fastapi import HTTPException
@@ -36,15 +37,23 @@ def get_usuario_by_documento(db: Session, documento: str) -> Usuario | None:
 
 
 def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
-    # unicidade (igual ao endpoint original)
+    # unicidade...
     if get_usuario_by_email(db, data.email):
         audit_log(db, "usuario", None, "create_conflict", {"email": data.email})
         db.commit()
         raise HTTPException(status_code=400, detail="Email já cadastrado.")
-    if get_usuario_by_documento(db, data.documento):
+    if data.documento and get_usuario_by_documento(db, data.documento):
         audit_log(db, "usuario", None, "create_conflict", {"documento": data.documento})
         db.commit()
         raise HTTPException(status_code=400, detail="Documento já cadastrado.")
+
+    # plano default = free
+    plano_free = get_plano_by_nome(db, "free")
+    if not plano_free:
+        # fallback duro (não deveria ocorrer, pois a migração seedou)
+        raise HTTPException(
+            status_code=500, detail="Plano padrão 'free' não encontrado."
+        )
 
     obj = Usuario(
         nome=data.nome,
@@ -52,9 +61,10 @@ def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
         telefone=data.telefone,
         documento=data.documento,
         senha_hash=hash_password(data.senha),
+        plano_id=plano_free.id,  # << aqui
     )
     db.add(obj)
-    db.flush()  # garante obj.id p/ log
+    db.flush()
 
     audit_log(
         db,
@@ -67,6 +77,7 @@ def create_usuario(db: Session, data: UsuarioCreate) -> Usuario:
                 "email": obj.email,
                 "telefone": obj.telefone,
                 "documento": obj.documento,
+                "plano_id": str(obj.plano_id),
             }
         ),
     )
