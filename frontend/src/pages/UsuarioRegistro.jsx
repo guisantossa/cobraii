@@ -145,38 +145,7 @@ export default function UsuariosRegister() {
             <Input id="documento" name="documento" value={form.documento} onChange={handleChangeDocumento} />
           </div>
 
-          <div className="md:col-span-2">
-            <Label htmlFor="plano_id">Plano</Label>
-            <div className="flex items-center gap-3">
-              {loadingPlanos && (
-                <div className="skeleton h-10 w-full" />
-              )}
-
-              {!loadingPlanos && planos.length === 0 && (
-                <p className="text-sm text-slate-600">Nenhum plano disponível.</p>
-              )}
-
-              {!loadingPlanos && planos.length > 0 && (
-                <select
-                  id="plano_id"
-                  name="plano_id"
-                  value={form.plano_id}
-                  onChange={handleChange}
-                  className="w-full border rounded px-3 py-2"
-                >
-                  {planos.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome} {formatPrecoPlano(p)}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            {/* Extras visuais (opcional): chips de recursos do plano selecionado */}
-            {!loadingPlanos && form.plano_id && (
-              <PlanoResumo plano={planos.find(p => p.id === form.plano_id)} />
-            )}
-          </div>
+          
 
           {error && (
             <div className="md:col-span-2">
