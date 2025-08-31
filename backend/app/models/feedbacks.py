@@ -6,6 +6,7 @@ from enum import Enum as PyEnum
 from app.db.base import Base
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
 
 
 class FeedbackTipo(PyEnum):
@@ -32,3 +33,5 @@ class Feedback(Base):
     comentario = Column(Text, nullable=True)
     contexto = Column(JSONB, nullable=True)  # page, ua, plano, etc
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    usuario = relationship("Usuario", backref="feedbacks")

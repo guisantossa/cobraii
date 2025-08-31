@@ -26,6 +26,10 @@ import TemplatesForm from '../pages/TemplatesForm'
 import Register from '../pages/UsuarioRegistro.jsx'
 import UsuarioForm from '../pages/UsuarioForm.jsx'
 import Onboarding from '../pages/Onboarding.jsx'
+
+import AdminUsuariosPage from '../pages/admin/AdminUsuarios'
+import AdminFeedbacksPage from '../pages/admin/AdminFeedbacks'
+
 function Layout() {
   return (
     <PrivateRoute>
@@ -72,6 +76,9 @@ export default function AppRoutes() {
         <Route path="/relatorios" element={<Relatorios />} />
         <Route path="/relatorios/cobrancas" element={<RelatoriosCobrancas />} />
         <Route path="/relatorios/lembretes" element={<RelatoriosLembretes />} />
+
+        <Route path="/admin/feedbacks" element={<AdminFeedbacksPage />} />
+        <Route path="/admin/usuarios" element={<AdminUsuariosPage />} />
         <Route path="/logs" element={<Logs />} />
 
 

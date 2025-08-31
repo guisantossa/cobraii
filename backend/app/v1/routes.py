@@ -1,5 +1,6 @@
 from app.audit.deps import use_audit_context
 from app.v1.endpoints import (
+    admin,
     admin_lembretes,
     analytics,
     clientes,
@@ -55,6 +56,13 @@ api_router.include_router(
     feedbacks.router,
     prefix="/feedbacks",
     tags=["Feedbacks"],
+    dependencies=[Depends(use_audit_context)],
+)
+
+api_router.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["Admin"],
     dependencies=[Depends(use_audit_context)],
 )
 api_router.include_router(planos.router, prefix="/planos", tags=["Planos"])

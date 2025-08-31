@@ -1,23 +1,9 @@
 // src/components/AppShell.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  Users,
-  UserPlus,
-  CircleDollarSign,
-  ListOrdered,
-  BellPlus,
-  BellRing,
-  FilePlus,
-  Files,
-  BarChart3,
-  LineChart,
-  History,
-  ScrollText,
-  Settings,
-  LogOut,
-  Clock,
+  LayoutDashboard, Users, UserPlus, CircleDollarSign, ListOrdered, BellPlus, BellRing,
+  FilePlus, Files, BarChart3, LineChart, History, ScrollText, Settings, LogOut, Clock, ShieldCheck
 } from 'lucide-react'
 
 import { getUsuarioLogado } from '../services/usuarios'
@@ -29,14 +15,16 @@ export default function AppShell() {
   const [dataHora, setDataHora] = useState('')
   const navigate = useNavigate()
 
-  // Busca apenas se houver token; desloga SOMENTE em 401/403
   useEffect(() => {
     if (!token) return
     let cancelled = false
     ;(async () => {
       try {
         const dados = await getUsuarioLogado()
-        if (!cancelled) setUsuario(dados)
+        if (!cancelled) {
+          setUsuario(dados || {})
+          // console.debug('ME:', dados) // descomente se quiser ver
+        }
       } catch (err) {
         const status = err?.response?.status
         if (status === 401 || status === 403) {
@@ -49,7 +37,6 @@ export default function AppShell() {
     return () => { cancelled = true }
   }, [token, logout])
 
-  // Data e hora em tempo real
   useEffect(() => {
     const tick = () => {
       const agora = new Date()
@@ -61,6 +48,16 @@ export default function AppShell() {
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [])
+
+  // ✅ Torna o check robusto (true boolean, "true" string, papéis, etc.)
+  const isAdmin = useMemo(() => {
+    const v = usuario?.is_admin
+    if (v === true) return true
+    if (typeof v === 'string' && v.toLowerCase() === 'true') return true
+    if (Array.isArray(usuario?.roles) && usuario.roles.includes('admin')) return true
+    if (usuario?.perfil === 'admin') return true
+    return false
+  }, [usuario])
 
   return (
     <div className="min-h-screen grid grid-cols-[240px_1fr] bg-[var(--bg)]">
@@ -76,53 +73,45 @@ export default function AppShell() {
         </div>
 
         <nav className="flex-1 p-2 space-y-1">
-          {/* Dashboard */}
           <SideItem to="/dashboard" end icon={<LayoutDashboard size={18} />}>Dashboard</SideItem>
 
           {/* Clientes */}
-          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Clientes
-          </div>
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Clientes</div>
           <SideItem to="/clientes/novo" end icon={<UserPlus size={18} />}>Adicionar</SideItem>
           <SideItem to="/clientes" end icon={<Users size={18} />}>Listar</SideItem>
-          
-          {/* Cobranças 
-          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Cobranças
-          </div>
-          <SideItem to="/cobrancas/novo" end icon={<CircleDollarSign size={18} />}>Adicionar</SideItem>
-          <SideItem to="/cobrancas" end icon={<ListOrdered size={18} />}>Listar</SideItem>
-          */}
+
           {/* Lembretes */}
-          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Lembretes
-          </div>
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Lembretes</div>
           <SideItem to="/lembretes/novo" end icon={<BellPlus size={18} />}>Adicionar</SideItem>
           <SideItem to="/lembretes" end icon={<BellRing size={18} />}>Listar</SideItem>
 
           {/* Templates */}
-          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Templates
-          </div>
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Templates</div>
           <SideItem to="/templates/novo" end icon={<FilePlus size={18} />}>Adicionar</SideItem>
           <SideItem to="/templates" end icon={<Files size={18} />}>Listar</SideItem>
 
           {/* Relatórios */}
-          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            Relatórios
-          </div>
-          {/*<SideItem to="/relatorios/cobrancas" end icon={<BarChart3 size={18} />}>Cobranças</SideItem> /*}
+          <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Relatórios</div>
           <SideItem to="/relatorios/lembretes" end icon={<LineChart size={18} />}>Lembretes</SideItem>
-
           {/* Outros */}
           <SideItem to="/historicos" end icon={<History size={18} />}>Histórico</SideItem>
           <SideItem to="/logs" end icon={<ScrollText size={18} />}>Logs</SideItem>
+          {/* Admin (só se isAdmin = true) */}
+          {isAdmin && (
+            <>
+              <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Admin</div>
+              <SideItem to="/admin/feedbacks" end icon={<ShieldCheck size={18} />}>Feedbacks</SideItem>
+            </>
+          )}
+          <SideItem to="/admin/usuarios" end icon={<Users size={18} />}>
+            Usuários
+          </SideItem>
+          
         </nav>
       </aside>
 
       {/* Main */}
       <div className="flex flex-col min-h-screen">
-        {/* Navbar / Header */}
         <header className="h-14 bg-white border-b border-[var(--border)] flex items-center justify-between px-6">
           <h1 className="font-bold">Painel</h1>
           <div className="flex items-center gap-5">
@@ -130,9 +119,17 @@ export default function AppShell() {
               <Clock size={16} />
               <span>{dataHora}</span>
             </div>
+
+            {/* Badge Admin para visualização rápida */}
             <span className="text-slate-800 font-medium truncate max-w-[220px]" title={usuario?.nome}>
               {usuario?.nome || '—'}
             </span>
+            {isAdmin && (
+              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                Admin
+              </span>
+            )}
+
             <button
               type="button"
               onClick={() => navigate('/configuracoes')}

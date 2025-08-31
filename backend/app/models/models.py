@@ -1,7 +1,7 @@
 import uuid
 
 from app.db.base import Base
-from sqlalchemy import Column, ForeignKey, String
+from sqlalchemy import Boolean, Column, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -17,6 +17,7 @@ class Usuario(Base):
     telefone = Column(String, nullable=False)
     senha_hash = Column(String, nullable=False)
     documento = Column(String, unique=True, nullable=False)
+    is_admin = Column(Boolean, nullable=False, default=False)
 
     clientes = relationship("Cliente", back_populates="usuarios", cascade="all, delete")
     cobrancas = relationship(

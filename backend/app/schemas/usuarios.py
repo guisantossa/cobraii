@@ -18,6 +18,7 @@ class UsuarioCreate(UsuarioBase):
 class UsuarioOut(UsuarioBase):
     id: UUID
     plano_id: UUID
+    is_admin: bool
 
     class Config:
         from_attributes = True
