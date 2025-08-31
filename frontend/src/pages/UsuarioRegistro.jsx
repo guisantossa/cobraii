@@ -115,11 +115,16 @@ export default function UsuariosRegister() {
   }
 
   return (
-    <div className="flex justify-center">
-      <Card className="p-5 max-w-3xl w-full">
-        <h1 className="h1 mb-4 text-center">Criar Conta</h1>
+    <div className="flex justify-center bg-gradient-to-b from-blue-50 to-white min-h-screen py-12 px-4">
+      <Card className="p-8 max-w-3xl w-full shadow-lg rounded-xl">
+        <h1 className="h1 mb-6 text-center text-gray-900 font-extrabold text-3xl">
+          Crie sua conta no Lembrii
+        </h1>
+        <p className="text-center text-gray-700 mb-8 max-w-md mx-auto">
+          Automatize lembretes para seus clientes via WhatsApp, SMS e e-mail. Configure em segundos e esqueça o resto.
+        </p>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="md:col-span-2">
             <Label htmlFor="nome">Nome</Label>
             <Input id="nome" name="nome" value={form.nome} onChange={handleChange} required />
@@ -145,23 +150,23 @@ export default function UsuariosRegister() {
             <Input id="documento" name="documento" value={form.documento} onChange={handleChangeDocumento} />
           </div>
 
-          
-
           {error && (
             <div className="md:col-span-2">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
 
-          <div className="md:col-span-2 flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={() => navigate('/login')}>Já tenho conta</Button>
+          <div className="md:col-span-2 flex justify-end gap-4 pt-4">
+            <Button type="button" variant="ghost" onClick={() => navigate('/login')}>
+              Já tenho conta
+            </Button>
             <Button type="submit" disabled={submitting || !!validationError}>
               {submitting ? 'Criando...' : 'Criar conta'}
             </Button>
           </div>
         </form>
 
-        <div className="mt-3 text-sm text-slate-600 text-center">
+        <div className="mt-6 text-sm text-gray-600 text-center">
           Ao criar a conta, você concorda com nossos termos de uso.
         </div>
       </Card>

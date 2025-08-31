@@ -30,7 +30,7 @@ import Onboarding from '../pages/Onboarding.jsx'
 import AdminUsuariosPage from '../pages/admin/AdminUsuarios'
 import AdminFeedbacksPage from '../pages/admin/AdminFeedbacks'
 
-import LandingPage from '../pages/lp.jsx'
+
 import LandingLembrii from '../pages/LandingLembrii.jsx'
 
 function Layout() {
@@ -52,7 +52,6 @@ export default function AppRoutes() {
       {/* Páginas públicas */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/lp" element={<LandingPage />} />
       {/* Protegidas com layout */}
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />
