@@ -4,3 +4,5 @@ node_modules/
 .venv/
 faker/
 teste_lembrete_n8n.sh
+.env.e2e
+frontend/e2e/.env.e2e
