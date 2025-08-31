@@ -11,6 +11,7 @@ app = FastAPI(title="Cobraii API", version="1.0.0")
 
 
 cors_origins = os.getenv("CORS_ORIGINS", "")
+
 origins = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
 
 app.add_middleware(
