@@ -24,9 +24,18 @@ class ForceHTTPSRedirectMiddleware(BaseHTTPMiddleware):
 
 
 cors_origins = os.getenv("CORS_ORIGINS", "")
+raw = [o for o in cors_origins.split(",") if o.strip()]
 
-origins = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+
+def _norm(o: str) -> str:
+    o = o.strip()
+    # remove só barra do final (não mexe no "https://")
+    return o[:-1] if o.endswith("/") else o
+
+
+origins = [_norm(o) for o in raw]
 print(f"CORS origins: {origins if origins else 'All (*)'}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins if origins else ["*"],
