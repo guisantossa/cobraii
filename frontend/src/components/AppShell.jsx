@@ -94,18 +94,17 @@ export default function AppShell() {
           <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Relatórios</div>
           <SideItem to="/relatorios/lembretes" end icon={<LineChart size={18} />}>Lembretes</SideItem>
           {/* Outros */}
-          <SideItem to="/historicos" end icon={<History size={18} />}>Histórico</SideItem>
+          {/*<SideItem to="/historicos" end icon={<History size={18} />}>Histórico</SideItem>  Removido por enquanto */}
           <SideItem to="/logs" end icon={<ScrollText size={18} />}>Logs</SideItem>
           {/* Admin (só se isAdmin = true) */}
           {isAdmin && (
             <>
               <div className="px-3 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Admin</div>
               <SideItem to="/admin/feedbacks" end icon={<ShieldCheck size={18} />}>Feedbacks</SideItem>
+              <SideItem to="/admin/usuarios" end icon={<Users size={18} />}>Usuários</SideItem>
             </>
           )}
-          <SideItem to="/admin/usuarios" end icon={<Users size={18} />}>
-            Usuários
-          </SideItem>
+          
           
         </nav>
       </aside>

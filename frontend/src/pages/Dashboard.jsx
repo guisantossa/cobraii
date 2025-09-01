@@ -221,14 +221,14 @@ export default function Dashboard() {
                 {cards?.clientes_total ?? '—'}
               </div>
             </Card>
-
+            {/*}
             <Card className="p-4 rounded-2xl shadow-soft">
               <div className="text-sm text-textsoft">Faturas abertas</div>
               <div className="text-2xl font-semibold text-danger">
                 {cards?.faturas_abertas ?? '—'}
               </div>
             </Card>
-
+            */}
             <Card className="p-4 rounded-2xl shadow-soft">
               <div className="text-sm text-textsoft">Lembretes ativos</div>
               <div className="text-2xl font-semibold text-primary">
@@ -249,7 +249,7 @@ export default function Dashboard() {
                 {cards?.entregues_periodo ?? '—'}
               </div>
             </Card>
-
+            {/*}
             <Card className="p-4 rounded-2xl shadow-soft">
               <div className="text-sm text-textsoft">Taxa de sucesso</div>
               <div className="text-2xl font-semibold text-secondary">
@@ -263,6 +263,7 @@ export default function Dashboard() {
                 {fmtMoeda(cards?.valor_pago_periodo || 0)}
               </div>
             </Card>
+            */}
           </div>
 
           {/* Gráfico 1: Envios por dia por canal (AreaChart com gradiente) */}
@@ -331,7 +332,7 @@ export default function Dashboard() {
             </div>
           </Card>
 
-          {/* Gráfico 2: Faturas por status (mensal) — BARRAS AGRUPADAS em 6 meses */}
+          {/* Gráfico 2: Faturas por status (mensal) — BARRAS AGRUPADAS em 6 meses *
           <Card className="p-4 rounded-2xl shadow-soft">
             <div className="mb-2 font-semibold">Faturas por status (últimos 6 meses)</div>
             <div className="h-80">
@@ -350,7 +351,7 @@ export default function Dashboard() {
                   <YAxis allowDecimals={false} stroke={C.axis} tickLine={false} />
                   <Tooltip content={<TooltipBox />} />
                   <Legend />
-                  {/* barras AGRUPADAS (sem stackId) */}
+                  {/* barras AGRUPADAS (sem stackId) *
                   <Bar dataKey="pendente" name="Pendente" fill={C.pendente} radius={[8,8,0,0]} />
                   <Bar dataKey="pago" name="Pago" fill={C.pago} radius={[8,8,0,0]} />
                   <Bar dataKey="atrasado" name="Atrasado" fill={C.atrasado} radius={[8,8,0,0]} />
@@ -359,8 +360,8 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
           </Card>
-
-          {/* Gráfico 3: Conversão (área dupla) */}
+          */}
+          {/* Gráfico 3: Conversão (área dupla) *
           <Card className="p-4 rounded-2xl shadow-soft">
             <div className="mb-2 font-semibold">
               Conversão de envios em pagamentos (janela {conv?.janela_dias || janela}d) — taxa {Math.round((conv?.taxa || 0) * 100)}%
@@ -412,6 +413,7 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
           </Card>
+          */}
         </>
       )}
     </div>
